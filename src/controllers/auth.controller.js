@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const redirectToML = (req, res) => {
-  const url = `https://auth.mercadolibre.com.cl/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${process.env.ML_REDIRECT_URI}`;
+  const url = `https://auth.mercadolibre.cl/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${process.env.ML_REDIRECT_URI}`;
 
   res.redirect(url);
 };
