@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String?
+  createdAt DateTime @default(now())
+
+  mercadolibreAccount MercadoLibreAccount?
+}
+
+model MercadoLibreAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  accessToken   String
+  refreshToken  String
+  expiresIn     Int
+  tokenType     String
+  scope         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenantId      String   @unique
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+}
