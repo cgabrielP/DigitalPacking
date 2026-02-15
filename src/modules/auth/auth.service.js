@@ -64,20 +64,22 @@ export const handleMercadoLibreCallback = async (code) => {
       name: `ML-${user_id}`,
     },
   });
-console.log("holaaaaa",response.data.refresh_token)
+console.log("holaaaaa",response.data)
+console.log("access data",access_tokena)
 console.log("soy el refresh token",refresh_token)
 
-  await prisma.mercadoLibreAccount.create({
-    data: {
-      userId: user_id.toString(),
-      accessToken: access_token,
-      refreshToken: refresh_token,
-      expiresIn: expires_in,
-      tokenType: token_type,
-      scope,
-      tenantId: tenant.id,
-    },
-  });
+await prisma.mercadoLibreAccount.create({
+  data: {
+    userId: user_id.toString(),
+    accessToken: access_token,
+    refreshToken: refresh_token ?? "", 
+    expiresIn: expires_in,
+    tokenType: token_type,
+    scope,
+    tenantId: tenant.id,
+  },
+});
+
 
   return { message: "Cuenta conectada correctamente" };
 };
