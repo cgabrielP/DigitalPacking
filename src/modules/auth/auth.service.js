@@ -12,7 +12,6 @@ export const getMercadoLibreAuthUrl = () => {
 };
 
 export const handleMercadoLibreCallback = async (code) => {
-  // 1️⃣ Intercambiar code por token
   const response = await axios.post(
     "https://api.mercadolibre.com/oauth/token",
     {
@@ -23,9 +22,7 @@ export const handleMercadoLibreCallback = async (code) => {
       redirect_uri: ML_REDIRECT_URI,
     },
     {
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     }
   );
 
@@ -38,14 +35,36 @@ export const handleMercadoLibreCallback = async (code) => {
     scope,
   } = response.data;
 
-  // 2️⃣ Crear tenant
+  // 🔎 1️⃣ Buscar si ya existe cuenta
+  const existingAccount = await prisma.mercadoLibreAccount.findFirst({
+    where: {
+      userId: user_id.toString(),
+    },
+  });
+
+  if (existingAccount) {
+    // 🔄 2️⃣ Actualizar tokens
+    await prisma.mercadoLibreAccount.update({
+      where: { id: existingAccount.id },
+      data: {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresIn: expires_in,
+        tokenType: token_type,
+        scope,
+      },
+    });
+
+    return { message: "Cuenta actualizada correctamente" };
+  }
+
+  // 🆕 3️⃣ Si no existe, crear tenant + cuenta
   const tenant = await prisma.tenant.create({
     data: {
       name: `ML-${user_id}`,
     },
   });
-console.log(response.data)
-  // 3️⃣ Guardar tokens
+
   await prisma.mercadoLibreAccount.create({
     data: {
       userId: user_id.toString(),
