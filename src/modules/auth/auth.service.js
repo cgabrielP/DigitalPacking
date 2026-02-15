@@ -64,7 +64,7 @@ export const handleMercadoLibreCallback = async (code) => {
       name: `ML-${user_id}`,
     },
   });
-console.log("holaaaaa",response.data)
+console.log("holaaaaa",response.data.refreshToken)
 
   await prisma.mercadoLibreAccount.create({
     data: {
