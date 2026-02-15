@@ -65,14 +65,14 @@ export const handleMercadoLibreCallback = async (code) => {
     },
   });
 console.log("holaaaaa",response.data)
-console.log("access data",access_tokena)
+console.log("access data",access_token)
 console.log("soy el refresh token",refresh_token)
 
 await prisma.mercadoLibreAccount.create({
   data: {
     userId: user_id.toString(),
     accessToken: access_token,
-    refreshToken: refresh_token ?? "", 
+    refreshToken: refresh_token ?? "vacio", 
     expiresIn: expires_in,
     tokenType: token_type,
     scope,
