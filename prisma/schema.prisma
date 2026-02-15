@@ -19,7 +19,7 @@ model MercadoLibreAccount {
   id            String   @id @default(cuid())
   userId        String
   accessToken   String
-  refreshToken  String
+  refreshToken  String?
   expiresIn     Int
   tokenType     String
   scope         String?
