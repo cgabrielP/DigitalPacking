@@ -24,7 +24,7 @@ export const getMLUser = async (req, res) => {
   try {
     const { tenantId } = req.params;
 
-    const user = await getMercadoLibreUser(tenantId);
+    const user = await authService.getMercadoLibreUser(tenantId);
 
     res.json(user);
   } catch (error) {
