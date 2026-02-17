@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginMercadoLibre, callbackMercadoLibre } from "./auth.controller.js";
+import { loginMercadoLibre, callbackMercadoLibre, getMLUser } from "./auth.controller.js";
 
 const router = Router();
 
