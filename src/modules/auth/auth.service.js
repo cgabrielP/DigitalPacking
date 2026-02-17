@@ -81,3 +81,26 @@ await prisma.mercadoLibreAccount.create({
 
   return { message: "Cuenta conectada correctamente" };
 };
+
+export const getMercadoLibreUser = async (tenantId) => {
+  // 1️⃣ Buscar cuenta
+  const account = await prisma.mercadoLibreAccount.findFirst({
+    where: { tenantId },
+  });
+
+  if (!account) {
+    throw new Error("Cuenta de Mercado Libre no encontrada");
+  }
+
+  // 2️⃣ Llamar API
+  const response = await axios.get(
+    "https://api.mercadolibre.com/users/me",
+    {
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+      },
+    }
+  );
+
+  return response.data;
+};
