@@ -1,5 +1,5 @@
 import axios from "axios";
-import prisma from "../../database/prisma";
+import prisma from "../../database/prisma.js";
 
 export const getMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({

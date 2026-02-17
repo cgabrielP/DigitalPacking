@@ -1,4 +1,4 @@
-import * as OrdersService from "./orders.service"
+import * as OrdersService from "./orders.service.js"
 
 export const getMLOrders = async (req, res) => {
   try {
