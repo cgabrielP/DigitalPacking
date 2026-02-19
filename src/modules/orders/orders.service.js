@@ -39,33 +39,40 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   const orders = response.data.results;
 
   for (const order of orders) {
-  await prisma.order.upsert({
-    where: { id: order.id.toString() },
-    update: {},
-    create: {
-      id: order.id.toString(),
-      status: order.status,
-      totalAmount: order.total_amount,
-      buyerNickname: order.buyer?.nickname,
-      tenantId,
-    },
-  });
-
-  for (const item of order.order_items) {
-    await prisma.orderItem.create({
-      data: {
-        orderId: order.id.toString(),
-        itemId: item.item.id,
-        title: item.item.title,
-        thumbnail: item.item.thumbnail,
-        quantity: item.quantity,
-        variation: item.variation_attributes
-          ?.map(v => `${v.name}: ${v.value_name}`)
-          .join(", ") ?? null,
+    await prisma.order.upsert({
+      where: { id: order.id.toString() },
+      update: {},
+      create: {
+        id: order.id.toString(),
+        status: order.status,
+        totalAmount: order.total_amount,
+        buyerNickname: order.buyer?.nickname,
+        tenantId,
       },
     });
+
+
+    await prisma.orderItem.deleteMany({
+      where: { orderId: order.id.toString() },
+    });
+
+
+    for (const item of order.order_items) {
+      await prisma.orderItem.create({
+        data: {
+          orderId: order.id.toString(),
+          itemId: item.item.id,
+          title: item.item.title,
+          thumbnail: item.item.thumbnail,
+          quantity: item.quantity,
+          variation: item.variation_attributes
+            ?.map(v => `${v.name}: ${v.value_name}`)
+            .join(", ") ?? null,
+        },
+      });
+    }
+
   }
-}
 
 
   return { message: "Órdenes sincronizadas" };
