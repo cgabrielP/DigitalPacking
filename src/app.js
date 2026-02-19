@@ -1,8 +1,9 @@
 import express from "express";
 import authRoutes from "./modules/auth/auth.routes.js";
 import ordersRoutes from "./modules/orders/orders.routes.js"
-
+import cors from "cors";
 const app = express();
+//app.use(cors({ origin: "*" }));
 
 app.use(express.json());
 

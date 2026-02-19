@@ -84,16 +84,27 @@ export const scanOrder = async (tenantId, orderId) => {
       id: orderId,
       tenantId,
     },
-    include: {
-      orderItems: true,
-    },
   });
 
   if (!order) {
     throw new Error("Orden no encontrada");
   }
 
-  return order;
+  if (order.pickingStatus === "completed") {
+    throw new Error("La orden ya fue completada");
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      pickingStatus: "scanned",
+    },
+    include: {
+      orderItems: true,
+    },
+  });
+
+  return updatedOrder;
 };
 
 export const packOrder = async (orderId) => {
