@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { getMLOrders } from "./orders.controller.js";
+import { getMLOrders, scanOrderController, syncOrdersController } from "./orders.controller.js";
 
 const router = Router();
 
-router.get("/ml/orders/:tenantId", getMLOrders);
-
+router.get("/:tenantId", getMLOrders);
+router.post("/scan/:tenantId", scanOrderController);
+router.post("/sync/:tenantId", syncOrdersController);
 
 export default router;

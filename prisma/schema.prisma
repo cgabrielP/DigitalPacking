@@ -13,19 +13,47 @@ model Tenant {
   createdAt DateTime @default(now())
 
   mercadolibreAccount MercadoLibreAccount?
+  orders              Order[]
 }
 
 model MercadoLibreAccount {
-  id            String   @id @default(cuid())
-  userId        String
-  accessToken   String
-  refreshToken  String?
-  expiresIn     Int
-  tokenType     String
-  scope         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  accessToken  String
+  refreshToken String?
+  expiresIn    Int
+  tokenType    String
+  scope        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  tenantId      String   @unique
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model Order {
+  id            String  @id
+  status        String
+  totalAmount   Float
+  buyerNickname String?
+  tenantId      String
+  tenant        Tenant  @relation(fields: [tenantId], references: [id])
+
+  pickingStatus String      @default("pending") // 👈 interno
+  createdAt     DateTime    @default(now())
+  orderItems    OrderItem[]
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  itemId    String
+  title     String
+  thumbnail String?
+  quantity  Int
+  variation String?
+
+  createdAt DateTime @default(now())
 }
