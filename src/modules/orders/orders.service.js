@@ -85,7 +85,7 @@ export const scanOrder = async (tenantId, orderId) => {
       tenantId,
     },
     include: {
-      items: true,
+      orderItems: true,
     },
   });
 
