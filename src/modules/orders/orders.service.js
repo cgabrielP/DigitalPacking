@@ -51,33 +51,55 @@ export const syncMercadoLibreOrders = async (tenantId) => {
       },
     });
 
-
     await prisma.orderItem.deleteMany({
       where: { orderId: order.id.toString() },
     });
 
-
     for (const item of order.order_items) {
+      let thumbnail = item.item.thumbnail ?? null;
+
+      if (!thumbnail) {
+        try {
+          const itemResponse = await axios.get(
+            `https://api.mercadolibre.com/items/${item.item.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${account.accessToken}`,
+              },
+            }
+          );
+          console.log(`✅ Item ${item.item.id}:`, JSON.stringify(itemResponse.data?.pictures?.slice(0, 1)));
+
+          thumbnail =
+            itemResponse.data.pictures?.[0]?.secure_url ??
+            itemResponse.data.pictures?.[0]?.url ??
+            itemResponse.data.thumbnail?.replace("http://", "https://") ??
+            null;
+        } catch (e) {
+          console.error(`❌ Item ${item.item.id} - Status:`, e.response?.status);
+          console.error(`❌ Item ${item.item.id} - Error:`, JSON.stringify(e.response?.data));
+        }
+      }
+
+      thumbnail = thumbnail?.replace("http://", "https://") ?? null;
+
       await prisma.orderItem.create({
         data: {
           orderId: order.id.toString(),
           itemId: item.item.id,
           title: item.item.title,
-          thumbnail: item.item.thumbnail,
+          thumbnail,
           quantity: item.quantity,
           variation: item.variation_attributes
-            ?.map(v => `${v.name}: ${v.value_name}`)
+            ?.map((v) => `${v.name}: ${v.value_name}`)
             .join(", ") ?? null,
         },
       });
     }
-
   }
-
 
   return { message: "Órdenes sincronizadas" };
 };
-
 export const scanOrder = async (tenantId, orderId) => {
   const order = await prisma.order.findFirst({
     where: {
