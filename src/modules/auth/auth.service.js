@@ -104,3 +104,28 @@ export const getMercadoLibreUser = async (tenantId) => {
 
   return response.data;
 };
+
+export const refreshAccessToken = async (account) => {
+  const response = await axios.post(
+    "https://api.mercadolibre.com/oauth/token",
+    new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET,
+      refresh_token: account.refreshToken,
+    })
+  );
+
+  const newAccessToken = response.data.access_token;
+  const newRefreshToken = response.data.refresh_token;
+
+  await prisma.mercadoLibreAccount.update({
+    where: { id: account.id },
+    data: {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    },
+  });
+
+  return newAccessToken;
+};

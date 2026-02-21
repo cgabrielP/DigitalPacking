@@ -1,5 +1,6 @@
 import axios from "axios";
 import prisma from "../../database/prisma.js";
+import { refreshAccessToken } from "../auth/auth.service.js";
 
 export const getMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
@@ -10,15 +11,26 @@ export const getMercadoLibreOrders = async (tenantId) => {
     throw new Error("Cuenta de Mercado Libre no encontrada");
   }
 
-  const response = await axios.get(
-    `https://api.mercadolibre.com/orders/search?seller=${account.userId}`,
-    {
+  let response;
+  try {
+    response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
       headers: {
         Authorization: `Bearer ${account.accessToken}`,
       },
-    }
-  );
+    });
+  } catch (error) {
+    if (error.response?.status === 401) {
+      const newAccessToken = await refreshAccessToken(account);
 
+      response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
+        headers: {
+          Authorization: `Bearer ${newAccessToken}`,
+        },
+      });
+    } else {
+      throw error;
+    }
+  }
   return response.data;
 };
 
@@ -26,15 +38,32 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
     where: { tenantId },
   });
-
-  const response = await axios.get(
-    `https://api.mercadolibre.com/orders/search?seller=${account.userId}`,
-    {
+  if (!account) {
+    throw new Error("Cuenta de Mercado Libre no encontrada");
+  }
+  let response;
+  try {
+    response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
       headers: {
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: `Bearer ${newAccessToken}`,
       },
+    });
+  } catch (error) {
+    if (error) {
+      if (error.response?.status === 401) {
+        const newAccessToken = await refreshAccessToken(account);
+
+        response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
+          headers: {
+            Authorization: `Bearer ${newAccessToken}`,
+          },
+        });
+      } else {
+        throw error;
+      }
     }
-  );
+  }
+
 
   const orders = response.data.results;
 
