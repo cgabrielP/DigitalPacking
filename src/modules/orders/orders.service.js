@@ -45,7 +45,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   try {
     response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
       headers: {
-        Authorization: `Bearer ${newAccessToken}`,
+        Authorization: `Bearer ${account.accessToken}`,
       },
     });
   } catch (error) {
