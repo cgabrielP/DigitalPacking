@@ -34,6 +34,18 @@ export const getMercadoLibreOrders = async (tenantId) => {
   return response.data;
 };
 
+export const getOrdersFromDB = async (tenantId) => {
+  return await prisma.order.findMany({
+    where: { tenantId },
+    include: {
+      orderItems: true, 
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
+
 export const syncMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
     where: { tenantId },

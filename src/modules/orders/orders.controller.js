@@ -38,4 +38,16 @@ export const syncOrdersController = async (req, res) => {
     res.status(500).json({ error: "Error sincronizando órdenes" });
   }
 };
+export const getDBOrders = async (req,res)=>{
+  try {
+    const { tenantId } = req.params;
+
+    const orders = await OrdersService.getOrdersFromDB(tenantId);
+
+    res.json(orders);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error obteniendo órdenes DB" });
+  }
+}
 
