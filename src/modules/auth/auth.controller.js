@@ -13,10 +13,9 @@ export const callbackMercadoLibre = async (req, res) => {
   try {
     const { code } = req.query;
     const { appToken } = await authService.handleMercadoLibreCallback(code);
-
-
     res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${appToken}`);
   } catch (error) {
+    console.error("Error en callback:", error.message); // ← agrega esto
     res.redirect(`${process.env.FRONTEND_URL}/auth/error`);
   }
 };
