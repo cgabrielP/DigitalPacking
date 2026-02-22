@@ -35,51 +35,41 @@ export const handleMercadoLibreCallback = async (code) => {
     scope,
   } = response.data;
 
-  // 🔎 1️⃣ Buscar si ya existe cuenta
-  const existingAccount = await prisma.mercadoLibreAccount.findFirst({
-    where: {
-      userId: user_id.toString(),
-    },
-  });
 
+  let tenant;
+  const existingAccount = await prisma.mercadoLibreAccount.findFirst({
+    where: { userId: user_id.toString() },
+    include: { tenant: true },
+  });
   if (existingAccount) {
-    // 🔄 2️⃣ Actualizar tokens
     await prisma.mercadoLibreAccount.update({
       where: { id: existingAccount.id },
+      data: { accessToken: access_token, refreshToken: refresh_token ?? null, expiresIn: expires_in },
+    });
+    tenant = existingAccount.tenant;
+  } else {
+    tenant = await prisma.tenant.create({ data: { name: `ML-${user_id}` } });
+    await prisma.mercadoLibreAccount.create({
       data: {
+        userId: user_id.toString(),
         accessToken: access_token,
-        refreshToken: refresh_token,
+        refreshToken: refresh_token ?? null,
         expiresIn: expires_in,
         tokenType: token_type,
         scope,
+        tenantId: tenant.id,
       },
     });
-
-    return { message: "Cuenta actualizada correctamente" };
   }
 
-  // 🆕 3️⃣ Si no existe, crear tenant + cuenta
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `ML-${user_id}`,
-    },
-  });
+  // ✅ Generas UN JWT tuyo con el tenantId adentro
+  const appToken = jwt.sign(
+    { tenantId: tenant.id, mlUserId: user_id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 
-
-await prisma.mercadoLibreAccount.create({
-  data: {
-    userId: user_id.toString(),
-    accessToken: access_token,
-    refreshToken: refresh_token ?? "vacio", 
-    expiresIn: expires_in,
-    tokenType: token_type,
-    scope,
-    tenantId: tenant.id,
-  },
-});
-
-
-  return { message: "Cuenta conectada correctamente" };
+  return { appToken };
 };
 
 export const getMercadoLibreUser = async (tenantId) => {

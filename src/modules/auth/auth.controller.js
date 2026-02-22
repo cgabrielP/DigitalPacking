@@ -8,21 +8,22 @@ export const loginMercadoLibre = (req, res) => {
   res.redirect(url);
 };
 
+// auth.controller.js
 export const callbackMercadoLibre = async (req, res) => {
   try {
     const { code } = req.query;
+    const { appToken } = await authService.handleMercadoLibreCallback(code);
 
-    await authService.handleMercadoLibreCallback(code);
 
-    res.json({ success: true });
+    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${appToken}`);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error conectando cuenta" });
+    res.redirect(`${process.env.FRONTEND_URL}/auth/error`);
   }
 };
+
 export const getMLUser = async (req, res) => {
   try {
-    const { tenantId } = req.params;
+    const { tenantId } = req;
 
     const user = await authService.getMercadoLibreUser(tenantId);
 

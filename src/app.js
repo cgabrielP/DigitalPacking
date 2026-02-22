@@ -3,9 +3,24 @@ import authRoutes from "./modules/auth/auth.routes.js";
 import ordersRoutes from "./modules/orders/orders.routes.js"
 import cors from "cors";
 const app = express();
-/* app.use(cors({ origin: "*" })); */
 
-app.use(express.json());
+
+const allowedOrigins = [
+  "http://localhost:5173",       
+  
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS bloqueado para: ${origin}`));
+    }
+  },
+  credentials: true, 
+}));
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
