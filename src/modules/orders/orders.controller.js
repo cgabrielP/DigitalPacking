@@ -52,4 +52,13 @@ export const getDBOrders = async (req,res)=>{
     res.status(500).json({ error: "Error obteniendo órdenes DB" });
   }
 }
+export const packOrderController = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await OrdersService.packOrder(orderId);
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
