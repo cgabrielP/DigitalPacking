@@ -14,10 +14,12 @@ export const getMLOrders = async (req, res) => {
 };
 
 export const scanOrderController = async (req, res) => {
+  console.log("headers:", req.headers["content-type"]);
+    console.log("body:", req.body);
+
   try {
     const { tenantId } = req;
     const { code } = req.body;
-
     const order = await OrdersService.scanOrder(tenantId, code);
 
     res.json(order);
