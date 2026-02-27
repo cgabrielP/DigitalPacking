@@ -15,7 +15,7 @@ export const getMLOrders = async (req, res) => {
 
 export const scanOrderController = async (req, res) => {
   try {
-    const { tenantId } = req.params;
+    const { tenantId } = req;
     const { code } = req.body;
 
     const order = await OrdersService.scanOrder(tenantId, code);
@@ -28,7 +28,7 @@ export const scanOrderController = async (req, res) => {
 
 export const syncOrdersController = async (req, res) => {
   try {
-    const { tenantId } = req.params;
+    const { tenantId } = req;
 
     const result = await OrdersService.syncMercadoLibreOrders(tenantId);
 
@@ -40,7 +40,7 @@ export const syncOrdersController = async (req, res) => {
 };
 export const getDBOrders = async (req,res)=>{
   try {
-    const { tenantId } = req.params;
+    const { tenantId } = req;
 
     const orders = await OrdersService.getOrdersFromDB(tenantId);
 

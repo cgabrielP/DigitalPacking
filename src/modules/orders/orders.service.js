@@ -38,7 +38,7 @@ export const getOrdersFromDB = async (tenantId) => {
   return await prisma.order.findMany({
     where: { tenantId },
     include: {
-      orderItems: true, 
+      orderItems: true,
     },
     orderBy: {
       createdAt: "desc",
@@ -82,7 +82,10 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   for (const order of orders) {
     await prisma.order.upsert({
       where: { id: order.id.toString() },
-      update: {},
+      update: {
+        status: order.status,
+        totalAmount: order.total_amount,
+      },
       create: {
         id: order.id.toString(),
         status: order.status,
