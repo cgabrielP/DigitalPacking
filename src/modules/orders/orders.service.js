@@ -2,102 +2,114 @@ import axios from "axios";
 import prisma from "../../database/prisma.js";
 import { refreshAccessToken } from "../auth/auth.service.js";
 
+const fetchOrders = async (account, extraParams = "") => {
+  const url = `https://api.mercadolibre.com/orders/search?seller=${account.userId}${extraParams}`;
+
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${account.accessToken}` },
+    });
+    return res;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      const newToken = await refreshAccessToken(account);
+      return axios.get(url, {
+        headers: { Authorization: `Bearer ${newToken}` },
+      });
+    }
+    throw error;
+  }
+};
+
+//funcion que lee sin tocar mi db
 export const getMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
     where: { tenantId },
   });
+  if (!account) throw new Error("Cuenta de Mercado Libre no encontrada");
 
-  if (!account) {
-    throw new Error("Cuenta de Mercado Libre no encontrada");
-  }
+  // ML no soporta múltiples substatuses en un solo query,
+  // así que hacemos dos llamadas y las combinamos
+  const [readyRes, printedRes] = await Promise.all([
+    fetchOrders(account, "&shipping.substatus=ready_to_print"),
+    fetchOrders(account, "&shipping.substatus=printed"),
+  ]);
 
-  let response;
-  try {
-    response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
-      headers: {
-        Authorization: `Bearer ${account.accessToken}`,
-      },
-    });
-  } catch (error) {
-    if (error.response?.status === 401) {
-      const newAccessToken = await refreshAccessToken(account);
+  const combined = [
+    ...(readyRes.data.results ?? []),
+    ...(printedRes.data.results ?? []),
+  ];
 
-      response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
-        headers: {
-          Authorization: `Bearer ${newAccessToken}`,
-        },
-      });
-    } else {
-      throw error;
-    }
-  }
-  return response.data;
+  // Deduplicar por si acaso
+  const unique = Array.from(new Map(combined.map((o) => [o.id, o])).values());
+
+  return { results: unique, total: unique.length };
 };
 
 export const getOrdersFromDB = async (tenantId) => {
-  return await prisma.order.findMany({
-    where: { tenantId },
-    include: {
-      orderItems: true,
+  return prisma.order.findMany({
+    where: {
+      tenantId,
+      shippingSubstatus: { in: ["ready_to_print", "printed"] },
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    include: { orderItems: true },
+    orderBy: { createdAt: "desc" },
   });
 };
-
 export const syncMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
     where: { tenantId },
   });
-  if (!account) {
-    throw new Error("Cuenta de Mercado Libre no encontrada");
-  }
-  let response;
-  try {
-    response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
-      headers: {
-        Authorization: `Bearer ${account.accessToken}`,
-      },
-    });
-  } catch (error) {
-    if (error) {
-      if (error.response?.status === 401) {
-        const newAccessToken = await refreshAccessToken(account);
+  if (!account) throw new Error("Cuenta de Mercado Libre no encontrada");
 
-        response = await axios.get(`https://api.mercadolibre.com/orders/search?seller=${account.userId}`, {
-          headers: {
-            Authorization: `Bearer ${newAccessToken}`,
-          },
-        });
-      } else {
-        throw error;
-      }
-    }
-  }
-
-
-  const orders = response.data.results;
+  // Traemos todas las órdenes sin filtrar
+  const response = await fetchOrders(account, "");
+  const orders = response.data.results ?? [];
 
   for (const order of orders) {
+    const shippingId = order.shipping?.id?.toString() ?? null;
+    let shippingSubstatus = null;
+    let shippingStatus = null;
+
+    // Consultamos el shipment por separado para obtener substatus real
+    if (shippingId) {
+      try {
+        const shipmentRes = await axios.get(
+          `https://api.mercadolibre.com/shipments/${shippingId}`,
+          { headers: { Authorization: `Bearer ${account.accessToken}` } }
+        );
+        shippingSubstatus = shipmentRes.data.substatus ?? null;
+        shippingStatus = shipmentRes.data.status ?? null;
+/*      
+        console.log(`🚚 Shipment ${shipmentRes.data.substatus}`);
+        console.log(`🚚 Shipment ${shippingId} | status: ${shippingStatus} | substatus: ${shippingSubstatus}`); */
+      } catch (e) {
+        console.error(`❌ Error shipment ${shippingId}:`, e.response?.data);
+      }
+    }
+
     await prisma.order.upsert({
       where: { id: order.id.toString() },
       update: {
         status: order.status,
         totalAmount: order.total_amount,
+        shippingId,
+        shippingSubstatus,
+        shippingStatus,
       },
       create: {
         id: order.id.toString(),
         status: order.status,
         totalAmount: order.total_amount,
         buyerNickname: order.buyer?.nickname,
+        shippingId,
+        shippingSubstatus,
+        shippingStatus,
         tenantId,
       },
     });
 
-    await prisma.orderItem.deleteMany({
-      where: { orderId: order.id.toString() },
-    });
+    await prisma.orderItem.deleteMany({ where: { orderId: order.id.toString() } });
 
     for (const item of order.order_items) {
       let thumbnail = item.item.thumbnail ?? null;
@@ -106,22 +118,15 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         try {
           const itemResponse = await axios.get(
             `https://api.mercadolibre.com/items/${item.item.id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${account.accessToken}`,
-              },
-            }
+            { headers: { Authorization: `Bearer ${account.accessToken}` } }
           );
-          console.log(`✅ Item ${item.item.id}:`, JSON.stringify(itemResponse.data?.pictures?.slice(0, 1)));
-
           thumbnail =
             itemResponse.data.pictures?.[0]?.secure_url ??
             itemResponse.data.pictures?.[0]?.url ??
             itemResponse.data.thumbnail?.replace("http://", "https://") ??
             null;
         } catch (e) {
-          console.error(`❌ Item ${item.item.id} - Status:`, e.response?.status);
-          console.error(`❌ Item ${item.item.id} - Error:`, JSON.stringify(e.response?.data));
+          console.error(`❌ Item ${item.item.id}:`, e.response?.data);
         }
       }
 
@@ -134,15 +139,16 @@ export const syncMercadoLibreOrders = async (tenantId) => {
           title: item.item.title,
           thumbnail,
           quantity: item.quantity,
-          variation: item.variation_attributes
-            ?.map((v) => `${v.name}: ${v.value_name}`)
-            .join(", ") ?? null,
+          variation:
+            item.variation_attributes
+              ?.map((v) => `${v.name}: ${v.value_name}`)
+              .join(", ") ?? null,
         },
       });
     }
   }
 
-  return { message: "Órdenes sincronizadas" };
+  return { message: "Órdenes sincronizadas", total: orders.length };
 };
 export const scanOrder = async (tenantId, orderId) => {
   const order = await prisma.order.findFirst({

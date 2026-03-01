@@ -39,7 +39,10 @@ model Order {
   tenantId      String
   tenant        Tenant  @relation(fields: [tenantId], references: [id])
 
-  pickingStatus String      @default("pending") // 👈 interno
+  pickingStatus String      @default("pending") 
+  shippingSubstatus   String?     
+  shippingStatus    String?
+  shippingId          String? 
   createdAt     DateTime    @default(now())
   orderItems    OrderItem[]
 }
