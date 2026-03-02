@@ -70,6 +70,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
     const shippingId = order.shipping?.id?.toString() ?? null;
     let shippingSubstatus = null;
     let shippingStatus = null;
+    let logisticType = null;
+    let shippingOptionName = null;
 
     // Consultamos el shipment por separado para obtener substatus real
     if (shippingId) {
@@ -78,11 +80,11 @@ export const syncMercadoLibreOrders = async (tenantId) => {
           `https://api.mercadolibre.com/shipments/${shippingId}`,
           { headers: { Authorization: `Bearer ${account.accessToken}` } }
         );
-        shippingSubstatus = shipmentRes.data.substatus ?? null;
+        shippingSubstatus = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
         shippingStatus = shipmentRes.data.status ?? null;
-/*      
-        console.log(`🚚 Shipment ${shipmentRes.data.substatus}`);
-        console.log(`🚚 Shipment ${shippingId} | status: ${shippingStatus} | substatus: ${shippingSubstatus}`); */
+        logisticType = shipmentRes.data.logistic_type ?? null;
+        shippingOptionName = shipmentRes.data.shipping_option?.name ?? null;
+
       } catch (e) {
         console.error(`❌ Error shipment ${shippingId}:`, e.response?.data);
       }
@@ -96,6 +98,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         shippingId,
         shippingSubstatus,
         shippingStatus,
+        logisticType,
+        shippingOptionName,
       },
       create: {
         id: order.id.toString(),
@@ -105,6 +109,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         shippingId,
         shippingSubstatus,
         shippingStatus,
+        logisticType,
+        shippingOptionName,
         tenantId,
       },
     });

@@ -43,6 +43,8 @@ model Order {
   shippingSubstatus   String?     
   shippingStatus    String?
   shippingId          String? 
+  logisticType        String?   
+  shippingOptionName  String?  
   createdAt     DateTime    @default(now())
   orderItems    OrderItem[]
 }
