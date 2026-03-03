@@ -20,6 +20,34 @@ const fetchOrders = async (account, extraParams = "") => {
     throw error;
   }
 };
+const fetchAllOrders = async (account) => {
+  const limit = 50;
+  let offset = 0;
+  let allOrders = [];
+
+  // Últimos 14 días
+  const dateFrom = new Date();
+  dateFrom.setDate(dateFrom.getDate() - 1);
+  const dateFromISO = dateFrom.toISOString();
+
+  while (true) {
+    const res = await fetchOrders(
+      account,
+      `&order.date_created.from=${dateFromISO}&limit=${limit}&offset=${offset}`
+    );
+    const results = res.data.results ?? [];
+    allOrders = [...allOrders, ...results];
+
+    const total = res.data.paging?.total ?? 0;
+    offset += limit;
+
+    console.log(`📄 Paginando: ${allOrders.length}/${total}`);
+
+    if (offset >= total || results.length === 0) break;
+  }
+
+  return allOrders;
+};
 
 //funcion que lee sin tocar mi db
 export const getMercadoLibreOrders = async (tenantId) => {
@@ -50,7 +78,15 @@ export const getOrdersFromDB = async (tenantId) => {
   return prisma.order.findMany({
     where: {
       tenantId,
-      shippingSubstatus: { in: ["ready_to_print", "printed"] },
+      shippingSubstatus: {
+        in: [
+          "ready_to_print",   // etiqueta por imprimir
+          "printed",          // etiqueta impresa
+          "ready_to_ship",    // listo para despachar
+          "rescheduled",      // entrega reprogramada
+          "not_delivered",    // no entregado (intento fallido)
+        ],
+      },
     },
     include: { orderItems: true },
     orderBy: { createdAt: "desc" },
@@ -62,9 +98,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   });
   if (!account) throw new Error("Cuenta de Mercado Libre no encontrada");
 
-  // Traemos todas las órdenes sin filtrar
-  const response = await fetchOrders(account, "");
-  const orders = response.data.results ?? [];
+  const orders = await fetchAllOrders(account);
+  console.log(`📦 Total órdenes obtenidas de ML: ${orders.length}`);
 
   for (const order of orders) {
     const shippingId = order.shipping?.id?.toString() ?? null;
@@ -73,18 +108,18 @@ export const syncMercadoLibreOrders = async (tenantId) => {
     let logisticType = null;
     let shippingOptionName = null;
 
-    // Consultamos el shipment por separado para obtener substatus real
     if (shippingId) {
       try {
         const shipmentRes = await axios.get(
           `https://api.mercadolibre.com/shipments/${shippingId}`,
           { headers: { Authorization: `Bearer ${account.accessToken}` } }
         );
-        shippingSubstatus = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
         shippingStatus = shipmentRes.data.status ?? null;
+        shippingSubstatus = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
         logisticType = shipmentRes.data.logistic_type ?? null;
         shippingOptionName = shipmentRes.data.shipping_option?.name ?? null;
 
+        console.log(`🚚 Shipment ${shippingId} | status: ${shippingStatus} | substatus: ${shippingSubstatus}`);
       } catch (e) {
         console.error(`❌ Error shipment ${shippingId}:`, e.response?.data);
       }
@@ -96,8 +131,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         status: order.status,
         totalAmount: order.total_amount,
         shippingId,
-        shippingSubstatus,
         shippingStatus,
+        shippingSubstatus,
         logisticType,
         shippingOptionName,
       },
@@ -107,8 +142,8 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         totalAmount: order.total_amount,
         buyerNickname: order.buyer?.nickname,
         shippingId,
-        shippingSubstatus,
         shippingStatus,
+        shippingSubstatus,
         logisticType,
         shippingOptionName,
         tenantId,
