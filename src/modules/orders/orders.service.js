@@ -266,9 +266,17 @@ export const scanOrder = async (tenantId, code) => {
   };
 };
 
-export const packOrder = async (orderId) => {
-  return prisma.order.update({
-    where: { id: orderId },
+export const packOrder = async (tenantId, code) => {
+  await prisma.order.updateMany({
+    where: {
+      tenantId,
+      OR: [
+        { packId: code },
+        { id: code },
+      ],
+    },
     data: { pickingStatus: "packed" },
   });
+
+  return { message: "Orden empacada correctamente" };
 };

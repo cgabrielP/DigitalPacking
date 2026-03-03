@@ -54,9 +54,10 @@ export const getDBOrders = async (req,res)=>{
 }
 export const packOrderController = async (req, res) => {
   try {
+    const { tenantId } = req;
     const { orderId } = req.params;
-    const order = await OrdersService.packOrder(orderId);
-    res.json(order);
+    const result = await OrdersService.packOrder(tenantId, orderId);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
