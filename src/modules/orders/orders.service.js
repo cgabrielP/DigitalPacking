@@ -222,33 +222,48 @@ export const syncMercadoLibreOrders = async (tenantId) => {
 
   return { message: "Órdenes sincronizadas", total: orders.length };
 };
-export const scanOrder = async (tenantId, orderId) => {
-  const order = await prisma.order.findFirst({
+export const scanOrder = async (tenantId, code) => {
+  // Buscar por packId primero, si no por orderId
+  const orders = await prisma.order.findMany({
     where: {
-      id: orderId,
       tenantId,
+      OR: [
+        { packId: code },
+        { id: code },
+      ],
     },
+    include: { orderItems: true },
   });
 
-  if (!order) {
+  if (!orders.length) {
     throw new Error("Orden no encontrada");
   }
 
-  if (order.pickingStatus === "completed") {
+  if (orders.every(o => o.pickingStatus === "completed")) {
     throw new Error("La orden ya fue completada");
   }
 
-  const updatedOrder = await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      pickingStatus: "scanned",
+  // Actualizar todas las órdenes del pack
+  await prisma.order.updateMany({
+    where: {
+      tenantId,
+      OR: [
+        { packId: code },
+        { id: code },
+      ],
     },
-    include: {
-      orderItems: true,
-    },
+    data: { pickingStatus: "scanned" },
   });
 
-  return updatedOrder;
+  // Retornar agrupado igual que getOrdersFromDB
+  return {
+    displayIdentifier: orders[0].packId ?? orders[0].id,
+    buyerNickname: orders[0].buyerNickname,
+    totalAmount: orders.reduce((acc, o) => acc + o.totalAmount, 0),
+    pickingStatus: "scanned",
+    orderItems: orders.flatMap(o => o.orderItems),
+    packedOrders: orders.map(o => o.id),
+  };
 };
 
 export const packOrder = async (orderId) => {
