@@ -267,7 +267,7 @@ export const scanOrder = async (tenantId, code) => {
 };
 
 export const packOrder = async (tenantId, code) => {
-  await prisma.order.updateMany({
+  const result = await prisma.order.updateMany({
     where: {
       tenantId,
       OR: [
@@ -278,5 +278,11 @@ export const packOrder = async (tenantId, code) => {
     data: { pickingStatus: "packed" },
   });
 
-  return { message: "Orden empacada correctamente" };
+  console.log(`📦 packOrder | code: ${code} | tenantId: ${tenantId} | updated: ${result.count}`);
+
+  if (result.count === 0) {
+    throw new Error("Orden no encontrada o no pertenece a este tenant");
+  }
+
+  return { message: "Orden empacada correctamente", updated: result.count };
 };
