@@ -38,7 +38,7 @@ model Order {
   buyerNickname String?
   tenantId      String
   tenant        Tenant  @relation(fields: [tenantId], references: [id])
-
+  packId        String? 
   pickingStatus String      @default("pending") 
   shippingSubstatus   String?     
   shippingStatus    String?

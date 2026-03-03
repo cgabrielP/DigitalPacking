@@ -75,22 +75,50 @@ export const getMercadoLibreOrders = async (tenantId) => {
 };
 
 export const getOrdersFromDB = async (tenantId) => {
-  return prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: {
       tenantId,
       shippingSubstatus: {
-        in: [
-          "ready_to_print",   // etiqueta por imprimir
-          "printed",          // etiqueta impresa
-          "ready_to_ship",    // listo para despachar
-          "rescheduled",      // entrega reprogramada
-          "not_delivered",    // no entregado (intento fallido)
-        ],
+        in: ["ready_to_print", "printed", "ready_to_ship", "rescheduled", "not_delivered"],
       },
     },
     include: { orderItems: true },
     orderBy: { createdAt: "desc" },
   });
+
+  // Agrupar por packId cuando existe
+  const packsMap = new Map();
+  const result = [];
+
+  for (const order of orders) {
+    if (order.packId) {
+      if (!packsMap.has(order.packId)) {
+        // Primera orden del pack, la usamos como "contenedor"
+        packsMap.set(order.packId, {
+          ...order,
+          displayIdentifier: order.packId, // 👈 lo que muestra el front
+          orderItems: [...order.orderItems],
+          packedOrders: [order.id],
+        });
+        result.push(packsMap.get(order.packId));
+      } else {
+        // Orden del mismo pack, mergeamos los items
+        const pack = packsMap.get(order.packId);
+        pack.orderItems = [...pack.orderItems, ...order.orderItems];
+        pack.packedOrders.push(order.id);
+        pack.totalAmount += order.totalAmount;
+      }
+    } else {
+      // Sin pack, va solo con su order.id
+      result.push({
+        ...order,
+        displayIdentifier: order.id, // 👈 lo que muestra el front
+        packedOrders: [order.id],
+      });
+    }
+  }
+
+  return result;
 };
 export const syncMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
@@ -124,7 +152,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         console.error(`❌ Error shipment ${shippingId}:`, e.response?.data);
       }
     }
-
+    console.log(`🔍 id: ${order.id} | display_id: ${order.pack_id}`);
     await prisma.order.upsert({
       where: { id: order.id.toString() },
       update: {
@@ -135,6 +163,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         shippingSubstatus,
         logisticType,
         shippingOptionName,
+        packId: order.pack_id?.toString() ?? null,
       },
       create: {
         id: order.id.toString(),
@@ -147,7 +176,9 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         logisticType,
         shippingOptionName,
         tenantId,
+        packId: order.pack_id?.toString() ?? null,
       },
+      
     });
 
     await prisma.orderItem.deleteMany({ where: { orderId: order.id.toString() } });
