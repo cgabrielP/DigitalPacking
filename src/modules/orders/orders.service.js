@@ -27,7 +27,7 @@ const fetchAllOrders = async (account) => {
 
   // Últimos 14 días
   const dateFrom = new Date();
-  dateFrom.setDate(dateFrom.getDate() - 1);
+  dateFrom.setDate(dateFrom.getDate() - 7);
   const dateFromISO = dateFrom.toISOString();
 
   while (true) {
