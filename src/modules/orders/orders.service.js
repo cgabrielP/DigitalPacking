@@ -48,7 +48,6 @@ const fetchAllOrders = async (account) => {
 
   return allOrders;
 };
-
 //funcion que lee sin tocar mi db
 export const getMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
@@ -78,41 +77,43 @@ export const getOrdersFromDB = async (tenantId) => {
   const orders = await prisma.order.findMany({
     where: {
       tenantId,
-      shippingSubstatus: {
-        in: ["ready_to_print", "printed", "ready_to_ship", "rescheduled", "not_delivered"],
+      // Ya no filtramos por substatus — traemos todo y el front categoriza
+      shippingStatus: {
+        not: null, // solo órdenes con envío
       },
     },
     include: { orderItems: true },
     orderBy: { createdAt: "desc" },
   });
 
-  // Agrupar por packId cuando existe
   const packsMap = new Map();
   const result = [];
 
   for (const order of orders) {
+    // Categoría para el toolbar del front
+    const shippingCategory = resolveCategory(order.shippingStatus, order.shippingSubstatus);
+
     if (order.packId) {
       if (!packsMap.has(order.packId)) {
-        // Primera orden del pack, la usamos como "contenedor"
         packsMap.set(order.packId, {
           ...order,
-          displayIdentifier: order.packId, // 👈 lo que muestra el front
+          shippingCategory,
+          displayIdentifier: order.packId,
           orderItems: [...order.orderItems],
           packedOrders: [order.id],
         });
         result.push(packsMap.get(order.packId));
       } else {
-        // Orden del mismo pack, mergeamos los items
         const pack = packsMap.get(order.packId);
         pack.orderItems = [...pack.orderItems, ...order.orderItems];
         pack.packedOrders.push(order.id);
         pack.totalAmount += order.totalAmount;
       }
     } else {
-      // Sin pack, va solo con su order.id
       result.push({
         ...order,
-        displayIdentifier: order.id, // 👈 lo que muestra el front
+        shippingCategory,
+        displayIdentifier: order.id,
         packedOrders: [order.id],
       });
     }
@@ -120,6 +121,19 @@ export const getOrdersFromDB = async (tenantId) => {
 
   return result;
 };
+
+const resolveCategory = (status, substatus) => {
+  if (status === "delivered") return "finalizados";
+  if (status === "shipped") return "en_transito";
+  if (status === "ready_to_ship") {
+    // Substatuses de etiqueta pendiente
+    if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
+    return "por_despachar";
+  }
+  if (["not_delivered", "rescheduled"].includes(substatus)) return "en_transito";
+  return "por_despachar"; // fallback
+};
+
 export const syncMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
     where: { tenantId },
@@ -178,7 +192,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         tenantId,
         packId: order.pack_id?.toString() ?? null,
       },
-      
+
     });
 
     await prisma.orderItem.deleteMany({ where: { orderId: order.id.toString() } });
@@ -222,6 +236,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
 
   return { message: "Órdenes sincronizadas", total: orders.length };
 };
+
 export const scanOrder = async (tenantId, code) => {
   // Buscar por packId primero, si no por orderId
   const orders = await prisma.order.findMany({
