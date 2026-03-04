@@ -125,7 +125,7 @@ export const getOrdersFromDB = async (tenantId) => {
 const resolveCategory = (status, substatus) => {
   // ── Finalizados ──
   if (["delivered", "not_delivered"].includes(status)) return "finalizados";
-  if (["delivered", "stolen", "lost"].includes(substatus))  return "finalizados";
+  if (["delivered", "stolen", "lost"].includes(substatus)) return "finalizados";
 
   // ── En tránsito ──
   if (status === "shipped") return "en_transito";
@@ -178,7 +178,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         console.error(`❌ Error shipment ${shippingId}:`, e.response?.data);
       }
     }
-    console.log(`🔍 id: ${order.id} | display_id: ${order.pack_id}`);
+    
     await prisma.order.upsert({
       where: { id: order.id.toString() },
       update: {
@@ -190,6 +190,9 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         logisticType,
         shippingOptionName,
         packId: order.pack_id?.toString() ?? null,
+        lastUpdatedAt: order.date_last_updated   // 👈
+          ? new Date(order.date_last_updated)
+          : null,
       },
       create: {
         id: order.id.toString(),
@@ -203,8 +206,10 @@ export const syncMercadoLibreOrders = async (tenantId) => {
         shippingOptionName,
         tenantId,
         packId: order.pack_id?.toString() ?? null,
+        lastUpdatedAt: order.date_last_updated   // 👈
+          ? new Date(order.date_last_updated)
+          : null,
       },
-
     });
 
     await prisma.orderItem.deleteMany({ where: { orderId: order.id.toString() } });

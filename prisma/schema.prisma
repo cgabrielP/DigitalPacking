@@ -45,6 +45,7 @@ model Order {
   shippingId          String? 
   logisticType        String?   
   shippingOptionName  String?  
+  lastUpdatedAt DateTime?
   createdAt     DateTime    @default(now())
   orderItems    OrderItem[]
 }
