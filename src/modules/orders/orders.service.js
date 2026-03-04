@@ -124,14 +124,17 @@ export const getOrdersFromDB = async (tenantId) => {
 
 const resolveCategory = (status, substatus) => {
   if (status === "delivered") return "finalizados";
-  if (status === "shipped") return "en_transito";
-  if (status === "ready_to_ship") {
-    // Substatuses de etiqueta pendiente
-    if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
-    return "por_despachar";
+
+  // Chequear substatus ANTES que el status
+  if (["in_hub", "in_packing_list", "dropped_off", "picked_up", "not_delivered", "rescheduled"].includes(substatus)) {
+    return "en_transito";
   }
-  if (["not_delivered", "rescheduled"].includes(substatus)) return "en_transito";
-  return "por_despachar"; // fallback
+
+  if (status === "shipped") return "en_transito";
+
+  if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
+
+  return "por_despachar";
 };
 
 export const syncMercadoLibreOrders = async (tenantId) => {
