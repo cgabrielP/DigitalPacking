@@ -123,18 +123,27 @@ export const getOrdersFromDB = async (tenantId) => {
 };
 
 const resolveCategory = (status, substatus) => {
-  if (status === "delivered") return "finalizados";
+  // ── Finalizados ──
+  if (["delivered", "not_delivered"].includes(status)) return "finalizados";
+  if (["delivered", "stolen", "lost"].includes(substatus))  return "finalizados";
 
-  // Chequear substatus ANTES que el status
-  if (["in_hub", "in_packing_list", "dropped_off", "picked_up", "not_delivered", "rescheduled"].includes(substatus)) {
-    return "en_transito";
-  }
-
+  // ── En tránsito ──
   if (status === "shipped") return "en_transito";
+  if ([
+    "in_hub",
+    "in_packing_list",
+    "dropped_off",
+    "picked_up",
+    "receiver_absent",   // 👈 intentó entregar pero no había nadie
+    "rescheduled",       // 👈 reprogramado
+    "returning",         // 👈 en devolución
+    "returned",          // 👈 devuelto
+  ].includes(substatus)) return "en_transito";
 
+  // ── Por despachar ──
   if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
 
-  return "por_despachar";
+  return "por_despachar"; // fallback
 };
 
 export const syncMercadoLibreOrders = async (tenantId) => {
