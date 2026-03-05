@@ -300,27 +300,44 @@ export const syncMercadoLibreOrders = async (tenantId) => {
 // ─── Escaneo y empaque ────────────────────────────────────────────────────────
 
 export const scanOrder = async (tenantId, code) => {
-  const orders = await prisma.order.findMany({
-    where: {
-      tenantId,
-      OR: [{ packId: code }, { id: code }],
-    },
-    include: { orderItems: true },
-  });
+  // El QR de la etiqueta ML devuelve un JSON: {"id":"46591213050","sender_id":...}
+  // El "id" de ese JSON es el shippingId.
+  // También puede venir el packId o orderId directo (escaneo manual).
+  let resolvedCode = code
+  let searchByShipping = false
 
-  if (!orders.length) throw new Error("Orden no encontrada");
+  try {
+    const parsed = JSON.parse(code)
+    if (parsed?.id) {
+      resolvedCode    = parsed.id.toString()
+      searchByShipping = true
+    }
+  } catch {
+    // No es JSON → es packId u orderId directo, seguimos normal
+  }
+
+  const where = {
+    tenantId,
+    OR: searchByShipping
+      ? [{ shippingId: resolvedCode }]
+      : [{ packId: resolvedCode }, { id: resolvedCode }],
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: { orderItems: true },
+  })
+
+  if (!orders.length) throw new Error("Orden no encontrada")
 
   if (orders.every(o => o.pickingStatus === "completed")) {
-    throw new Error("La orden ya fue completada");
+    throw new Error("La orden ya fue completada")
   }
 
   await prisma.order.updateMany({
-    where: {
-      tenantId,
-      OR: [{ packId: code }, { id: code }],
-    },
+    where,
     data: { pickingStatus: "scanned" },
-  });
+  })
 
   return {
     displayIdentifier: orders[0].packId ?? orders[0].id,
@@ -329,23 +346,41 @@ export const scanOrder = async (tenantId, code) => {
     pickingStatus:     "scanned",
     orderItems:        orders.flatMap(o => o.orderItems),
     packedOrders:      orders.map(o => o.id),
-  };
-};
+  }
+}
 
 export const packOrder = async (tenantId, code) => {
-  const result = await prisma.order.updateMany({
-    where: {
-      tenantId,
-      OR: [{ packId: code }, { id: code }],
-    },
-    data: { pickingStatus: "packed" },
-  });
+  // Mismo parseo que scanOrder — el código puede ser JSON del QR o un ID directo
+  let resolvedCode     = code
+  let searchByShipping = false
 
-  console.log(`📦 packOrder | code: ${code} | tenantId: ${tenantId} | updated: ${result.count}`);
-
-  if (result.count === 0) {
-    throw new Error("Orden no encontrada o no pertenece a este tenant");
+  try {
+    const parsed = JSON.parse(code)
+    if (parsed?.id) {
+      resolvedCode     = parsed.id.toString()
+      searchByShipping = true
+    }
+  } catch {
+    // ID directo
   }
 
-  return { message: "Orden empacada correctamente", updated: result.count };
-};
+  const where = {
+    tenantId,
+    OR: searchByShipping
+      ? [{ shippingId: resolvedCode }]
+      : [{ packId: resolvedCode }, { id: resolvedCode }],
+  }
+
+  const result = await prisma.order.updateMany({
+    where,
+    data: { pickingStatus: "packed" },
+  })
+
+  console.log(`📦 packOrder | code: ${resolvedCode} | tenantId: ${tenantId} | updated: ${result.count}`)
+
+  if (result.count === 0) {
+    throw new Error("Orden no encontrada o no pertenece a este tenant")
+  }
+
+  return { message: "Orden empacada correctamente", updated: result.count }
+}
