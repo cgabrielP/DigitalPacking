@@ -299,22 +299,21 @@ export const syncMercadoLibreOrders = async (tenantId) => {
 
 // ─── Escaneo y empaque ────────────────────────────────────────────────────────
 
-export const scanOrder = async (tenantId, code) => {
-  // El QR de la etiqueta ML devuelve un JSON: {"id":"46591213050","sender_id":...}
-  // El "id" de ese JSON es el shippingId.
-  // También puede venir el packId o orderId directo (escaneo manual).
-  let resolvedCode = code
-  let searchByShipping = false
-
-  try {
-    const parsed = JSON.parse(code)
-    if (parsed?.id) {
-      resolvedCode    = parsed.id.toString()
-      searchByShipping = true
-    }
-  } catch {
-    // No es JSON → es packId u orderId directo, seguimos normal
+// El QR de la etiqueta ML tiene el formato: ^"id":"46591213050","sender_id":...
+// No es JSON válido — empieza con ^ y sin llaves.
+// Extraemos el shippingId con regex. Si no matchea, asumimos packId u orderId directo.
+const parseScannedCode = (code) => {
+  const match = code.match(/"id"\s*:\s*"(\d+)"/)
+  if (match?.[1]) {
+    return { resolvedCode: match[1], searchByShipping: true }
   }
+  return { resolvedCode: code.trim(), searchByShipping: false }
+}
+
+export const scanOrder = async (tenantId, code) => {
+  const { resolvedCode, searchByShipping } = parseScannedCode(code)
+
+  console.log(`🔍 scanOrder | resolved: ${resolvedCode} | byShipping: ${searchByShipping}`)
 
   const where = {
     tenantId,
@@ -350,19 +349,9 @@ export const scanOrder = async (tenantId, code) => {
 }
 
 export const packOrder = async (tenantId, code) => {
-  // Mismo parseo que scanOrder — el código puede ser JSON del QR o un ID directo
-  let resolvedCode     = code
-  let searchByShipping = false
+  const { resolvedCode, searchByShipping } = parseScannedCode(code)
 
-  try {
-    const parsed = JSON.parse(code)
-    if (parsed?.id) {
-      resolvedCode     = parsed.id.toString()
-      searchByShipping = true
-    }
-  } catch {
-    // ID directo
-  }
+  console.log(`📦 packOrder | resolved: ${resolvedCode} | tenantId: ${tenantId}`)
 
   const where = {
     tenantId,
@@ -376,11 +365,13 @@ export const packOrder = async (tenantId, code) => {
     data: { pickingStatus: "packed" },
   })
 
-  console.log(`📦 packOrder | code: ${resolvedCode} | tenantId: ${tenantId} | updated: ${result.count}`)
-
   if (result.count === 0) {
     throw new Error("Orden no encontrada o no pertenece a este tenant")
   }
 
   return { message: "Orden empacada correctamente", updated: result.count }
 }
+
+
+
+
