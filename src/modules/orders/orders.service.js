@@ -25,17 +25,17 @@ const fetchOrders = async (account, extraParams = "") => {
 
 /**
  * Pagina todas las órdenes modificadas desde `fromDate`.
- * Si no se pasa fromDate (primer sync), usa los últimos 14 días como fallback.
+ * Si no se pasa fromDate (primer sync), usa los últimos 60 días como fallback.
  */
 const fetchAllOrders = async (account, fromDate = null) => {
   const limit  = 50;
   let   offset = 0;
   let   allOrders = [];
 
-  // Primer sync → últimos 14 días; syncs siguientes → desde lastSyncAt
+  // Primer sync → últimos 60 días; syncs siguientes → desde lastSyncAt
   const dateFrom    = fromDate ?? (() => {
     const d = new Date();
-    d.setDate(d.getDate() - 14);
+    d.setDate(d.getDate() - 60);
     return d;
   })();
   const dateFromISO = dateFrom instanceof Date
@@ -64,7 +64,48 @@ const fetchAllOrders = async (account, fromDate = null) => {
   return allOrders;
 };
 
-// ─── Servicio: órdenes desde ML (sin tocar DB) ───────────────────────────────
+// Intenta obtener el thumbnail de un item con múltiples fuentes de fallback
+const fetchThumbnail = async (item, accessToken) => {
+  // 1. Thumbnail directo de la orden
+  let thumbnail = item.item.thumbnail ?? null
+  if (thumbnail) return thumbnail.replace("http://", "https://")
+
+  // 2. Llamar a /items/{id} y buscar en pictures + thumbnail
+  try {
+    const itemRes = await axios.get(
+      `https://api.mercadolibre.com/items/${item.item.id}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    const data = itemRes.data
+
+    thumbnail =
+      data.pictures?.find(p => p.secure_url)?.secure_url ??
+      data.pictures?.find(p => p.url)?.url ??
+      data.thumbnail ??
+      null
+
+    if (thumbnail) return thumbnail.replace("http://", "https://")
+  } catch (e) {
+    console.error(`❌ Item ${item.item.id}:`, e.response?.data?.message ?? e.message)
+  }
+
+  // 3. Llamar a /items/{id}/pictures como último recurso
+  try {
+    const picRes = await axios.get(
+      `https://api.mercadolibre.com/items/${item.item.id}/pictures`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    const pics = picRes.data
+    if (Array.isArray(pics) && pics.length > 0) {
+      thumbnail = pics[0].secure_url ?? pics[0].url ?? null
+      if (thumbnail) return thumbnail.replace("http://", "https://")
+    }
+  } catch {
+    // silencioso
+  }
+
+  return null
+}
 
 export const getMercadoLibreOrders = async (tenantId) => {
   const account = await prisma.mercadoLibreAccount.findFirst({
@@ -160,7 +201,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   const fromDate    = isFirstSync ? null : tenant.lastSyncAt;
 
   console.log(isFirstSync
-    ? "🆕 Primer sync — trayendo últimos 14 días"
+    ? "🆕 Primer sync — trayendo últimos 60 días"
     : `🔄 Sync incremental desde ${fromDate.toISOString()}`
   );
 
@@ -243,25 +284,7 @@ export const syncMercadoLibreOrders = async (tenantId) => {
     await prisma.orderItem.deleteMany({ where: { orderId: order.id.toString() } });
 
     for (const item of order.order_items) {
-      let thumbnail = item.item.thumbnail ?? null;
-
-      if (!thumbnail) {
-        try {
-          const itemResponse = await axios.get(
-            `https://api.mercadolibre.com/items/${item.item.id}`,
-            { headers: { Authorization: `Bearer ${account.accessToken}` } }
-          );
-          thumbnail =
-            itemResponse.data.pictures?.[0]?.secure_url ??
-            itemResponse.data.pictures?.[0]?.url ??
-            itemResponse.data.thumbnail?.replace("http://", "https://") ??
-            null;
-        } catch (e) {
-          console.error(`❌ Item ${item.item.id}:`, e.response?.data);
-        }
-      }
-
-      thumbnail = thumbnail?.replace("http://", "https://") ?? null;
+      const thumbnail = await fetchThumbnail(item, account.accessToken)
 
       await prisma.orderItem.create({
         data: {
@@ -371,7 +394,3 @@ export const packOrder = async (tenantId, code) => {
 
   return { message: "Orden empacada correctamente", updated: result.count }
 }
-
-
-
-
