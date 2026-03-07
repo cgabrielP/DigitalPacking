@@ -8,27 +8,58 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String?
-  createdAt DateTime @default(now())
-  lastSyncAt DateTime?
-  mercadolibreAccount MercadoLibreAccount?
-  orders              Order[]
+  createdAt DateTime  @default(now())
+
+  mlAccounts MercadoLibreAccount[]
+  orders     Order[]
+  users      User[]
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  PICKER
+  DELIVERY
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String
+  passwordHash String?
+  name         String?
+  role         Role     @default(PICKER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
 }
 
 model MercadoLibreAccount {
-  id           String   @id @default(cuid())
-  userId       String
+  id           String    @id @default(cuid())
+  mlUserId     String
+  nickname     String?
+  email        String?
   accessToken  String
   refreshToken String?
   expiresIn    Int
   tokenType    String
   scope        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  tenantId String @unique
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  orders   Order[]
+
+  @@unique([tenantId, mlUserId])
 }
 
 model Order {
@@ -36,30 +67,34 @@ model Order {
   status        String
   totalAmount   Float
   buyerNickname String?
-  tenantId      String
-  tenant        Tenant  @relation(fields: [tenantId], references: [id])
-  packId        String? 
-  pickingStatus String      @default("pending") 
-  shippingSubstatus   String?     
-  shippingStatus    String?
-  shippingId          String? 
-  logisticType        String?   
-  shippingOptionName  String?  
-  lastUpdatedAt DateTime?
-  createdAt     DateTime    @default(now())
-  orderItems    OrderItem[]
+  packId        String?
+
+  pickingStatus      String    @default("pending")
+  shippingSubstatus  String?
+  shippingStatus     String?
+  shippingId         String?
+  logisticType       String?
+  shippingOptionName String?
+  lastUpdatedAt      DateTime?
+  createdAt          DateTime  @default(now())
+
+  tenantId    String
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+
+  mlAccountId String
+  mlAccount   MercadoLibreAccount @relation(fields: [mlAccountId], references: [id])
+
+  orderItems OrderItem[]
 }
 
 model OrderItem {
-  id      String @id @default(cuid())
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
-
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
   itemId    String
   title     String
   thumbnail String?
   quantity  Int
   variation String?
-
   createdAt DateTime @default(now())
 }

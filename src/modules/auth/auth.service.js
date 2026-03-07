@@ -1,107 +1,218 @@
 import axios from "axios";
+import bcrypt from "bcrypt";
 import prisma from "../../database/prisma.js";
 import jwt from "jsonwebtoken";
-const {
-  ML_CLIENT_ID,
-  ML_CLIENT_SECRET,
-  ML_REDIRECT_URI,
-} = process.env;
 
-export const getMercadoLibreAuthUrl = () => {
-  return `https://auth.mercadolibre.cl/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=${ML_REDIRECT_URI}`;
-};
+const { ML_CLIENT_ID, ML_CLIENT_SECRET, ML_REDIRECT_URI } = process.env;
 
-export const handleMercadoLibreCallback = async (code) => {
-  const response = await axios.post("https://api.mercadolibre.com/oauth/token", {
-    grant_type: "authorization_code",
-    client_id: ML_CLIENT_ID,
-    client_secret: ML_CLIENT_SECRET,
-    code,
-    redirect_uri: ML_REDIRECT_URI,
-  }, { headers: { "Content-Type": "application/json" } });
+// ─────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────
 
-  const { access_token, refresh_token, expires_in, user_id, token_type, scope } = response.data;
+const signToken = (payload) =>
+  jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-  let tenant;
-  const existingAccount = await prisma.mercadoLibreAccount.findFirst({
-    where: { userId: user_id.toString() },
-    include: { tenant: true },
-  });
+// ─────────────────────────────────────────
+//  REGISTRO
+// ─────────────────────────────────────────
 
-  if (existingAccount) {
-    await prisma.mercadoLibreAccount.update({
-      where: { id: existingAccount.id },
-      data: { accessToken: access_token, refreshToken: refresh_token ?? null, expiresIn: expires_in, tokenType: token_type, scope },
+export const registerUser = async ({ name, email, password, tenantName }) => {
+  // 1. Verificar si el email ya existe globalmente
+  const existing = await prisma.user.findFirst({ where: { email } });
+  if (existing) throw new Error("El email ya está registrado");
+
+  // 2. Crear tenant + usuario ADMIN en una transacción
+  const { user, tenant } = await prisma.$transaction(async (tx) => {
+    const tenant = await tx.tenant.create({
+      data: { name: tenantName ?? `Empresa de ${name}` },
     });
-    tenant = existingAccount.tenant; // ✅ recuperas el tenant
-  } else {
-    tenant = await prisma.tenant.create({ data: { name: `ML-${user_id}` } });
-    await prisma.mercadoLibreAccount.create({
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await tx.user.create({
       data: {
-        userId: user_id.toString(),
-        accessToken: access_token,
-        refreshToken: refresh_token ?? null,
-        expiresIn: expires_in,
-        tokenType: token_type,
-        scope,
+        email,
+        passwordHash,
+        name,
+        role: "ADMIN",
         tenantId: tenant.id,
       },
     });
+
+    return { user, tenant };
+  });
+
+  const token = signToken({
+    userId:   user.id,
+    tenantId: tenant.id,
+    role:     user.role,
+  });
+
+  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, tenant };
+};
+
+// ─────────────────────────────────────────
+//  LOGIN
+// ─────────────────────────────────────────
+
+export const loginUser = async ({ email, password }) => {
+  const user = await prisma.user.findFirst({
+    where: { email, isActive: true },
+    include: { tenant: true },
+  });
+
+  if (!user) throw new Error("Credenciales inválidas");
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) throw new Error("Credenciales inválidas");
+
+  const token = signToken({
+    userId:   user.id,
+    tenantId: user.tenantId,
+    role:     user.role,
+  });
+
+  return {
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    tenant: { id: user.tenant.id, name: user.tenant.name },
+  };
+};
+
+// ─────────────────────────────────────────
+//  MERCADO LIBRE — OAuth
+// ─────────────────────────────────────────
+
+/**
+ * Genera la URL de autorización.
+ * Embebe el tenantId en el parámetro `state` para recuperarlo en el callback.
+ */
+export const getMercadoLibreAuthUrl = (tenantId) => {
+  const state = Buffer.from(JSON.stringify({ tenantId })).toString("base64");
+  return (
+    `https://auth.mercadolibre.cl/authorization` +
+    `?response_type=code` +
+    `&client_id=${ML_CLIENT_ID}` +
+    `&redirect_uri=${ML_REDIRECT_URI}` +
+    `&state=${state}`
+  );
+};
+
+/**
+ * Procesa el callback de ML.
+ * Lee el tenantId desde `state` y vincula/actualiza la cuenta ML a ese tenant.
+ */
+export const handleMercadoLibreCallback = async (code, state) => {
+  // 1. Decodificar state para obtener tenantId
+  let tenantId;
+  try {
+    const decoded = JSON.parse(Buffer.from(state, "base64").toString("utf8"));
+    tenantId = decoded.tenantId;
+  } catch {
+    throw new Error("State inválido en callback de ML");
   }
 
-  // ✅ Siempre genera el JWT, sin importar si era cuenta nueva o existente
-  const appToken = jwt.sign(
-    { tenantId: tenant.id, mlUserId: user_id },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+  // 2. Intercambiar code por tokens en ML
+  const response = await axios.post(
+    "https://api.mercadolibre.com/oauth/token",
+    {
+      grant_type:    "authorization_code",
+      client_id:     ML_CLIENT_ID,
+      client_secret: ML_CLIENT_SECRET,
+      code,
+      redirect_uri:  ML_REDIRECT_URI,
+    },
+    { headers: { "Content-Type": "application/json" } }
   );
 
-  return { appToken };
+  const { access_token, refresh_token, expires_in, user_id, token_type, scope } =
+    response.data;
+
+  // 3. Obtener nickname de ML para mostrar en UI
+  let nickname = null;
+  try {
+    const meRes = await axios.get("https://api.mercadolibre.com/users/me", {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    nickname = meRes.data.nickname ?? null;
+  } catch {
+    // no crítico
+  }
+
+  // 4. Upsert de la cuenta ML (misma cuenta ML no puede conectarse dos veces al mismo tenant)
+  await prisma.mercadoLibreAccount.upsert({
+    where: {
+      tenantId_mlUserId: { tenantId, mlUserId: user_id.toString() },
+    },
+    update: {
+      accessToken:  access_token,
+      refreshToken: refresh_token ?? null,
+      expiresIn:    expires_in,
+      tokenType:    token_type,
+      scope,
+      nickname,
+      isActive:     true,
+    },
+    create: {
+      mlUserId:     user_id.toString(),
+      accessToken:  access_token,
+      refreshToken: refresh_token ?? null,
+      expiresIn:    expires_in,
+      tokenType:    token_type,
+      scope,
+      nickname,
+      tenantId,
+    },
+  });
+
+  return { tenantId };
+};
+
+// ─────────────────────────────────────────
+//  CUENTAS ML DEL TENANT
+// ─────────────────────────────────────────
+
+export const getMlAccounts = async (tenantId) => {
+  return prisma.mercadoLibreAccount.findMany({
+    where:   { tenantId, isActive: true },
+    select:  { id: true, mlUserId: true, nickname: true, lastSyncedAt: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
 };
 
 export const getMercadoLibreUser = async (tenantId) => {
-  // 1️⃣ Buscar cuenta
   const account = await prisma.mercadoLibreAccount.findFirst({
-    where: { tenantId },
+    where: { tenantId, isActive: true },
   });
+  if (!account) throw new Error("Cuenta de Mercado Libre no encontrada");
 
-  if (!account) {
-    throw new Error("Cuenta de Mercado Libre no encontrada");
-  }
-
-  // 2️⃣ Llamar API
-  const response = await axios.get(
-    "https://api.mercadolibre.com/users/me",
-    {
-      headers: {
-        Authorization: `Bearer ${account.accessToken}`,
-      },
-    }
-  );
-
+  const response = await axios.get("https://api.mercadolibre.com/users/me", {
+    headers: { Authorization: `Bearer ${account.accessToken}` },
+  });
   return response.data;
 };
+
+// ─────────────────────────────────────────
+//  REFRESH TOKEN
+// ─────────────────────────────────────────
 
 export const refreshAccessToken = async (account) => {
   const response = await axios.post(
     "https://api.mercadolibre.com/oauth/token",
     new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.ML_CLIENT_ID,
-      client_secret: process.env.ML_CLIENT_SECRET,
+      grant_type:    "refresh_token",
+      client_id:     ML_CLIENT_ID,
+      client_secret: ML_CLIENT_SECRET,
       refresh_token: account.refreshToken,
     })
   );
 
-  const newAccessToken = response.data.access_token;
+  const newAccessToken  = response.data.access_token;
   const newRefreshToken = response.data.refresh_token;
 
   await prisma.mercadoLibreAccount.update({
     where: { id: account.id },
-    data: {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    },
+    data:  { accessToken: newAccessToken, refreshToken: newRefreshToken },
   });
 
   return newAccessToken;
