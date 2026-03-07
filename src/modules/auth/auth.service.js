@@ -71,6 +71,7 @@ export const loginUser = async ({ email, password }) => {
     userId:   user.id,
     tenantId: user.tenantId,
     role:     user.role,
+    name: user.name
   });
 
   return {
