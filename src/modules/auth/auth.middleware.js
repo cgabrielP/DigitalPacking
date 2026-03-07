@@ -20,6 +20,19 @@ export const authenticate = (req, res, next) => {
   }
 };
 
+export const authenticateQuery = (req, res, next) => {
+  const token = req.query.token || req.headers.authorization?.split(" ")[1]
+  if (!token) return res.status(401).json({ error: "No autorizado" })
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.userId   = decoded.userId
+    req.tenantId = decoded.tenantId
+    req.role     = decoded.role
+    next()
+  } catch {
+    res.status(401).json({ error: "Token inválido" })
+  }
+}
 // ─── Guard de roles ───────────────────────────────────────────────────────────
 // Uso: router.delete("/users/:id", authenticate, requireRole("ADMIN"), controller)
 
