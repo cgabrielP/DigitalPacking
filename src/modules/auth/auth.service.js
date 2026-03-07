@@ -46,6 +46,7 @@ export const registerUser = async ({ name, email, password, tenantName }) => {
     userId:   user.id,
     tenantId: tenant.id,
     role:     user.role,
+    name: user.name
   });
 
   return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, tenant };
