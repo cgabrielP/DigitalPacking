@@ -346,7 +346,7 @@ export const scanOrder = async (tenantId, code) => {
     packedOrders:      orders.map(o => o.id),
   };
 };
-
+/* aa */
 export const packOrder = async (tenantId, code) => {
   const { resolvedCode, searchByShipping } = parseScannedCode(code);
 
