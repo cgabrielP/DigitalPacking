@@ -26,16 +26,17 @@ const fetchOrders = async (account, extraParams = "") => {
 };
 
 const fetchAllOrders = async (account) => {
-  const limit = 50;
-  let offset = 0;
-  let allOrders = [];
+  const limit  = 50;
+  let   offset = 0;
+  let   allOrders = [];
 
+  // FIX 3 — Restar 5 min a lastSyncedAt para cubrir el "hueco" entre syncs
   const baseDate = account.lastSyncedAt ?? (() => {
     const d = new Date();
     d.setDate(d.getDate() - 14);
     return d;
   })();
-  const dateFrom = new Date(baseDate.getTime() - 5 * 60 * 1000);
+  const dateFrom    = new Date(baseDate.getTime() - 5 * 60 * 1000); // −5 min
   const dateFromISO = dateFrom.toISOString();
 
   const isFirstSync = !account.lastSyncedAt;
@@ -73,7 +74,7 @@ const fetchThumbnail = async (item, accessToken) => {
     const data = itemRes.data;
     thumbnail =
       data.pictures?.find(p => p.secure_url)?.secure_url ??
-      data.pictures?.find(p => p.url)?.url ??
+      data.pictures?.find(p => p.url)?.url               ??
       data.thumbnail ?? null;
     if (thumbnail) return thumbnail.replace("http://", "https://");
   } catch (e) {
@@ -118,9 +119,9 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   const totalOrders = results.reduce((acc, r) => acc + r.total, 0);
 
   return {
-    message: `Sync completado — ${accounts.length} cuenta(s)`,
+    message:  `Sync completado — ${accounts.length} cuenta(s)`,
     accounts: results,
-    total: totalOrders,
+    total:    totalOrders,
   };
 };
 
@@ -130,33 +131,44 @@ const syncAccount = async (account, tenantId) => {
   const syncStartedAt = new Date();
   const label = account.nickname ?? account.mlUserId;
 
-  const orders = await fetchAllOrders(account);
+  // FIX 4 — Refrescar token al inicio del sync para que todas las
+  // llamadas (shipments, items, pictures) usen el mismo token fresco
+  let accessToken = account.accessToken;
+  try {
+    accessToken = await refreshAccessToken(account);
+    console.log(`🔑 [${label}] Token refrescado correctamente`);
+  } catch (e) {
+    console.warn(`⚠️ [${label}] No se pudo refrescar token, se usa el actual`);
+  }
+
+  const orders = await fetchAllOrders({ ...account, accessToken });
   console.log(`📦 [${label}] Órdenes a procesar: ${orders.length}`);
 
   if (orders.length === 0) {
     await prisma.mercadoLibreAccount.update({
       where: { id: account.id },
-      data: { lastSyncedAt: syncStartedAt },
+      data:  { lastSyncedAt: syncStartedAt },
     });
     return { accountId: account.id, nickname: label, total: 0, message: "Sin cambios" };
   }
 
   for (const order of orders) {
     const shippingId = order.shipping?.id?.toString() ?? null;
-    let shippingSubstatus = null;
-    let shippingStatus = null;
-    let logisticType = null;
+    let shippingSubstatus  = null;
+    let shippingStatus     = null;
+    let logisticType       = null;
     let shippingOptionName = null;
 
     if (shippingId) {
       try {
+        // FIX 4 — Usar accessToken local (fresco) en lugar de account.accessToken
         const shipmentRes = await axios.get(
           `https://api.mercadolibre.com/shipments/${shippingId}`,
-          { headers: { Authorization: `Bearer ${account.accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        shippingStatus = shipmentRes.data.status ?? null;
-        shippingSubstatus = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
-        logisticType = shipmentRes.data.logistic_type ?? null;
+        shippingStatus     = shipmentRes.data.status ?? null;
+        shippingSubstatus  = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
+        logisticType       = shipmentRes.data.logistic_type ?? null;
         shippingOptionName = shipmentRes.data.shipping_option?.name ?? null;
 
         console.log(`🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}`);
@@ -168,43 +180,46 @@ const syncAccount = async (account, tenantId) => {
     await prisma.order.upsert({
       where: { id: order.id.toString() },
       update: {
-        status: order.status,
-        totalAmount: order.total_amount,
+        status:            order.status,
+        totalAmount:       order.total_amount,
         shippingId,
         shippingStatus,
         shippingSubstatus,
         logisticType,
         shippingOptionName,
-        packId: order.pack_id?.toString() ?? null,
-        lastUpdatedAt: order.date_last_updated ? new Date(order.date_last_updated) : null,
-        mlAccountId: account.id,   // ← actualiza si la orden cambió de cuenta (edge case)
+        packId:            order.pack_id?.toString() ?? null,
+        lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
+        mlAccountId:       account.id,
       },
       create: {
-        id: order.id.toString(),
-        status: order.status,
-        totalAmount: order.total_amount,
-        buyerNickname: order.buyer?.nickname,
+        id:                order.id.toString(),
+        status:            order.status,
+        totalAmount:       order.total_amount,
+        buyerNickname:     order.buyer?.nickname,
         shippingId,
         shippingStatus,
         shippingSubstatus,
         logisticType,
         shippingOptionName,
         tenantId,
-        mlAccountId: account.id,
-        packId: order.pack_id?.toString() ?? null,
-        lastUpdatedAt: order.date_last_updated ? new Date(order.date_last_updated) : null,
+        mlAccountId:       account.id,
+        packId:            order.pack_id?.toString() ?? null,
+        lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
       },
     });
 
+    // FIX 2 — Resolver todas las thumbnails ANTES de tocar la DB,
+    // luego borrar + crear en una sola transacción atómica
     const itemsData = await Promise.all(
       order.order_items.map(async (item) => {
-        const thumbnail = await fetchThumbnail(item, account.accessToken);
+        // FIX 4 — Usar accessToken local (fresco) en fetchThumbnail
+        const thumbnail = await fetchThumbnail(item, accessToken);
         return {
-          orderId: order.id.toString(),
-          itemId: item.item.id,
-          title: item.item.title,
+          orderId:   order.id.toString(),
+          itemId:    item.item.id,
+          title:     item.item.title,
           thumbnail,
-          quantity: item.quantity,
+          quantity:  item.quantity,
           variation: item.variation_attributes
             ?.map(v => `${v.name}: ${v.value_name}`)
             .join(", ") ?? null,
@@ -220,15 +235,15 @@ const syncAccount = async (account, tenantId) => {
 
   await prisma.mercadoLibreAccount.update({
     where: { id: account.id },
-    data: { lastSyncedAt: syncStartedAt },
+    data:  { lastSyncedAt: syncStartedAt },
   });
 
   console.log(`✅ [${label}] lastSyncedAt → ${syncStartedAt.toISOString()}`);
 
   return {
     accountId: account.id,
-    nickname: label,
-    total: orders.length,
+    nickname:  label,
+    total:     orders.length,
     lastSyncedAt: syncStartedAt,
   };
 };
@@ -238,14 +253,16 @@ const syncAccount = async (account, tenantId) => {
 // ─────────────────────────────────────────
 
 export const getOrdersFromDB = async (tenantId) => {
+  // FIX 1 — Quitar el filtro shippingStatus: { not: null }
+  // para que las órdenes sin envío también sean visibles
   const orders = await prisma.order.findMany({
-    where: { tenantId },
+    where:   { tenantId },
     include: { orderItems: true },
     orderBy: { createdAt: "desc" },
   });
 
   const packsMap = new Map();
-  const result = [];
+  const result   = [];
 
   for (const order of orders) {
     const shippingCategory = resolveCategory(order.shippingStatus, order.shippingSubstatus);
@@ -256,7 +273,7 @@ export const getOrdersFromDB = async (tenantId) => {
           ...order,
           shippingCategory,
           displayIdentifier: order.packId,
-          orderItems: [...order.orderItems],
+          orderItems:   [...order.orderItems],
           packedOrders: [order.id],
         });
         result.push(packsMap.get(order.packId));
@@ -280,14 +297,14 @@ export const getOrdersFromDB = async (tenantId) => {
 };
 
 const resolveCategory = (status, substatus) => {
-  if (["delivered", "not_delivered"].includes(status)) return "finalizados";
-  if (["delivered", "stolen", "lost"].includes(substatus)) return "finalizados";
-  if (status === "shipped") return "en_transito";
+  if (["delivered", "not_delivered"].includes(status))       return "finalizados";
+  if (["delivered", "stolen", "lost"].includes(substatus))   return "finalizados";
+  if (status === "shipped")                                  return "en_transito";
   if ([
     "in_hub", "in_packing_list", "dropped_off", "picked_up",
     "receiver_absent", "rescheduled", "returning", "returned",
-  ].includes(substatus)) return "en_transito";
-  if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
+  ].includes(substatus))                                     return "en_transito";
+  if (["ready_to_print", "printed"].includes(substatus))     return "por_despachar";
   return "por_despachar";
 };
 
@@ -315,18 +332,18 @@ export const scanOrder = async (tenantId, code) => {
 
   const orders = await prisma.order.findMany({ where, include: { orderItems: true } });
 
-  if (!orders.length) throw new Error("Orden no encontrada");
+  if (!orders.length)                              throw new Error("Orden no encontrada");
   if (orders.every(o => o.pickingStatus === "completed")) throw new Error("La orden ya fue completada");
 
   await prisma.order.updateMany({ where, data: { pickingStatus: "scanned" } });
 
   return {
     displayIdentifier: orders[0].packId ?? orders[0].id,
-    buyerNickname: orders[0].buyerNickname,
-    totalAmount: orders.reduce((acc, o) => acc + o.totalAmount, 0),
-    pickingStatus: "scanned",
-    orderItems: orders.flatMap(o => o.orderItems),
-    packedOrders: orders.map(o => o.id),
+    buyerNickname:     orders[0].buyerNickname,
+    totalAmount:       orders.reduce((acc, o) => acc + o.totalAmount, 0),
+    pickingStatus:     "scanned",
+    orderItems:        orders.flatMap(o => o.orderItems),
+    packedOrders:      orders.map(o => o.id),
   };
 };
 
