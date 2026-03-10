@@ -154,24 +154,64 @@ const syncAccount = async (account, tenantId) => {
 
   for (const order of orders) {
     const shippingId = order.shipping?.id?.toString() ?? null;
+
+    // ── Campos existentes ──────────────────────────────────────────────────
     let shippingSubstatus  = null;
     let shippingStatus     = null;
     let logisticType       = null;
     let shippingOptionName = null;
 
+    // ── Nuevos campos de timing ────────────────────────────────────────────
+    // delivery_promise: timestamp hasta el cual el vendedor debe despachar
+    // para que el comprador reciba en el plazo comprometido.
+    // Ejemplo: "2024-11-15T18:00:00.000-03:00" → despachar antes de las 18hs
+    let deliveryPromise        = null;
+    let estimatedDeliveryTime  = null; // fecha estimada de llegada al comprador
+    let estimatedDeliveryLimit = null; // fecha límite de entrega
+    let estimatedDeliveryFinal = null; // fecha final comprometida (la más estricta)
+
+    // ── Nuevos campos de método de envío ──────────────────────────────────
+    let shippingMethodId   = null;
+    let shippingMethodName = null;
+    let shippingMethodType = null; // "standard", "express", "same_day", "turbo"
+    let shippingDeliverTo  = null; // "address" o "agency"
+
     if (shippingId) {
       try {
-        // FIX 4 — Usar accessToken local (fresco) en lugar de account.accessToken
         const shipmentRes = await axios.get(
           `https://api.mercadolibre.com/shipments/${shippingId}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        shippingStatus     = shipmentRes.data.status ?? null;
-        shippingSubstatus  = shipmentRes.data.substatus ?? shipmentRes.data.status ?? null;
-        logisticType       = shipmentRes.data.logistic_type ?? null;
-        shippingOptionName = shipmentRes.data.shipping_option?.name ?? null;
 
-        console.log(`🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}`);
+        const s  = shipmentRes.data;
+        const lt = s.lead_time ?? {};
+
+        // Campos existentes
+        shippingStatus     = s.status ?? null;
+        shippingSubstatus  = s.substatus ?? s.status ?? null;
+        logisticType       = s.logistic?.type ?? null;
+        shippingOptionName = s.shipping_option?.name ?? null;
+
+        // Timing — delivery_promise viene como string ISO en lead_time
+        deliveryPromise        = lt.delivery_promise ?? null;
+        estimatedDeliveryTime  = lt.estimated_delivery_time?.date
+                                   ? new Date(lt.estimated_delivery_time.date) : null;
+        estimatedDeliveryLimit = lt.estimated_delivery_limit?.date
+                                   ? new Date(lt.estimated_delivery_limit.date) : null;
+        estimatedDeliveryFinal = lt.estimated_delivery_final?.date
+                                   ? new Date(lt.estimated_delivery_final.date) : null;
+
+        // Shipping method
+        shippingMethodId   = lt.shipping_method?.id   ?? null;
+        shippingMethodName = lt.shipping_method?.name ?? null;
+        shippingMethodType = lt.shipping_method?.type ?? null;
+        shippingDeliverTo  = lt.shipping_method?.deliver_to ?? null;
+
+        console.log(
+          `🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}` +
+          ` | método: ${shippingMethodName ?? "—"} (${shippingMethodType ?? "—"})` +
+          ` | promesa despacho: ${deliveryPromise ?? "—"}`
+        );
       } catch (e) {
         console.error(`❌ [${label}] Error shipment ${shippingId}:`, e.response?.data);
       }
@@ -190,6 +230,15 @@ const syncAccount = async (account, tenantId) => {
         packId:            order.pack_id?.toString() ?? null,
         lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
         mlAccountId:       account.id,
+        // Nuevos campos
+        deliveryPromise,
+        estimatedDeliveryTime,
+        estimatedDeliveryLimit,
+        estimatedDeliveryFinal,
+        shippingMethodId,
+        shippingMethodName,
+        shippingMethodType,
+        shippingDeliverTo,
       },
       create: {
         id:                order.id.toString(),
@@ -205,6 +254,15 @@ const syncAccount = async (account, tenantId) => {
         mlAccountId:       account.id,
         packId:            order.pack_id?.toString() ?? null,
         lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
+        // Nuevos campos
+        deliveryPromise,
+        estimatedDeliveryTime,
+        estimatedDeliveryLimit,
+        estimatedDeliveryFinal,
+        shippingMethodId,
+        shippingMethodName,
+        shippingMethodType,
+        shippingDeliverTo,
       },
     });
 
@@ -212,7 +270,6 @@ const syncAccount = async (account, tenantId) => {
     // luego borrar + crear en una sola transacción atómica
     const itemsData = await Promise.all(
       order.order_items.map(async (item) => {
-        // FIX 4 — Usar accessToken local (fresco) en fetchThumbnail
         const thumbnail = await fetchThumbnail(item, accessToken);
         return {
           orderId:   order.id.toString(),
@@ -253,8 +310,6 @@ const syncAccount = async (account, tenantId) => {
 // ─────────────────────────────────────────
 
 export const getOrdersFromDB = async (tenantId) => {
-  // FIX 1 — Quitar el filtro shippingStatus: { not: null }
-  // para que las órdenes sin envío también sean visibles
   const orders = await prisma.order.findMany({
     where:   { tenantId },
     include: { orderItems: true },
@@ -265,13 +320,15 @@ export const getOrdersFromDB = async (tenantId) => {
   const result   = [];
 
   for (const order of orders) {
-    const shippingCategory = resolveCategory(order.shippingStatus, order.shippingSubstatus);
+    const shippingCategory  = resolveCategory(order.shippingStatus, order.shippingSubstatus);
+    const deliveryUrgency   = resolveDeliveryUrgency(order.deliveryPromise);
 
     if (order.packId) {
       if (!packsMap.has(order.packId)) {
         packsMap.set(order.packId, {
           ...order,
           shippingCategory,
+          deliveryUrgency,
           displayIdentifier: order.packId,
           orderItems:   [...order.orderItems],
           packedOrders: [order.id],
@@ -287,6 +344,7 @@ export const getOrdersFromDB = async (tenantId) => {
       result.push({
         ...order,
         shippingCategory,
+        deliveryUrgency,
         displayIdentifier: order.id,
         packedOrders: [order.id],
       });
@@ -295,6 +353,8 @@ export const getOrdersFromDB = async (tenantId) => {
 
   return result;
 };
+
+// ── Categoría de envío (existente) ────────────────────────────────────────
 
 const resolveCategory = (status, substatus) => {
   if (["delivered", "not_delivered"].includes(status))       return "finalizados";
@@ -306,6 +366,29 @@ const resolveCategory = (status, substatus) => {
   ].includes(substatus))                                     return "en_transito";
   if (["ready_to_print", "printed"].includes(substatus))     return "por_despachar";
   return "por_despachar";
+};
+
+// ── Urgencia de despacho basada en delivery_promise ───────────────────────
+// "today"    → la promesa vence hoy (hay que despachar YA)
+// "overdue"  → la promesa ya venció (tarde)
+// "upcoming" → la promesa es en los próximos días (no urge hoy)
+// "none"     → sin promesa definida
+
+const resolveDeliveryUrgency = (deliveryPromise) => {
+  if (!deliveryPromise) return "none";
+
+  const promise = new Date(deliveryPromise);
+  const now     = new Date();
+
+  // Si la fecha ya pasó
+  if (promise < now) return "overdue";
+
+  // Si vence hoy (mismo día calendario)
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  if (promise <= endOfToday) return "today";
+
+  return "upcoming";
 };
 
 // ─────────────────────────────────────────

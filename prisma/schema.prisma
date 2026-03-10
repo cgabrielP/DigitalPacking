@@ -75,6 +75,15 @@ model Order {
   shippingId         String?
   logisticType       String?
   shippingOptionName String?
+  deliveryPromise         String?    
+  estimatedDeliveryTime   DateTime?  
+  estimatedDeliveryLimit  DateTime?  
+  estimatedDeliveryFinal  DateTime?  
+
+  shippingMethodId        Int?      
+  shippingMethodName      String?    
+  shippingMethodType      String?    
+  shippingDeliverTo       String?    
   lastUpdatedAt      DateTime?
   createdAt          DateTime  @default(now())
 
