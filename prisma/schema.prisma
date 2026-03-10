@@ -79,7 +79,7 @@ model Order {
   estimatedDeliveryTime   DateTime?  
   estimatedDeliveryLimit  DateTime?  
   estimatedDeliveryFinal  DateTime?  
-
+  receiverCity String?
   shippingMethodId        Int?      
   shippingMethodName      String?    
   shippingMethodType      String?    

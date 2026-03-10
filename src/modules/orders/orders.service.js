@@ -170,11 +170,12 @@ const syncAccount = async (account, tenantId) => {
     let estimatedDeliveryLimit = null; // fecha límite de entrega
     let estimatedDeliveryFinal = null; // fecha final comprometida (la más estricta)
 
-    // ── Nuevos campos de método de envío ──────────────────────────────────
+    // ── Nuevos campos de método de envío y destino ────────────────────────
     let shippingMethodId   = null;
     let shippingMethodName = null;
-    let shippingMethodType = null; // "standard", "express", "same_day", "turbo"
-    let shippingDeliverTo  = null; // "address" o "agency"
+    let shippingMethodType = null;
+    let shippingDeliverTo  = null; // "residential", "agency", "pickup_point"
+    let receiverCity       = null; // comuna/ciudad destino, ej: "San Miguel"
 
     if (shippingId) {
       try {
@@ -204,19 +205,23 @@ const syncAccount = async (account, tenantId) => {
         estimatedDeliveryFinal = so.estimated_delivery_final?.date
                                    ? new Date(so.estimated_delivery_final.date) : null;
 
-        // Shipping method — el ID está en shipping_option.shipping_method_id
-        // El name y type no están en este objeto, se toman de lead_time si existe
+        // Shipping method
         const lt = s.lead_time ?? {};
         shippingMethodId   = so.shipping_method_id ?? lt.shipping_method?.id ?? null;
-        shippingMethodName = lt.shipping_method?.name ?? null;
+        shippingMethodName = so.name ?? lt.shipping_method?.name ?? null; // "Prioritario a domicilio"
         shippingMethodType = lt.shipping_method?.type ?? so.delivery_type ?? null;
-        shippingDeliverTo  = lt.shipping_method?.deliver_to ?? null;
+
+        // receiver_address tiene la preferencia de entrega y la ciudad/comuna destino
+        const ra          = s.receiver_address ?? {};
+        shippingDeliverTo = ra.delivery_preference ?? null; // "residential", "agency"
+        receiverCity      = ra.city?.name ?? ra.neighborhood?.name ?? null; // "San Miguel"
 
         console.log(
           `🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}` +
-          ` | método: ${shippingOptionName ?? "—"} (id: ${shippingMethodId ?? "—"})` +
+          ` | método: ${shippingMethodName ?? "—"} (id: ${shippingMethodId ?? "—"})` +
           ` | despachar antes de: ${deliveryPromise ?? "—"}` +
-          ` | entrega estimada: ${estimatedDeliveryTime?.toISOString() ?? "—"}`
+          ` | entrega estimada: ${estimatedDeliveryTime?.toISOString() ?? "—"}` +
+          ` | destino: ${receiverCity ?? "—"} (${shippingDeliverTo ?? "—"})`
         );
       } catch (e) {
         console.error(`❌ [${label}] Error shipment ${shippingId}:`, e.response?.data);
@@ -245,6 +250,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodName,
         shippingMethodType,
         shippingDeliverTo,
+        receiverCity,
       },
       create: {
         id:                order.id.toString(),
@@ -269,6 +275,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodName,
         shippingMethodType,
         shippingDeliverTo,
+        receiverCity,
       },
     });
 
