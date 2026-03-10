@@ -318,18 +318,19 @@ const parseScannedCode = (code) => {
   return { resolvedCode: code.trim(), searchByShipping: false }
 };
 
+const buildWhere = (tenantId, resolvedCode, searchByShipping) => ({
+  tenantId,
+  OR: searchByShipping
+    ? [{ shippingId: resolvedCode }]
+    : [{ packId: resolvedCode }, { id: resolvedCode }, { shippingId: resolvedCode }],
+});
+
 export const scanOrder = async (tenantId, code) => {
   const { resolvedCode, searchByShipping } = parseScannedCode(code);
 
   console.log(`🔍 scanOrder | resolved: ${resolvedCode} | byShipping: ${searchByShipping}`);
 
-  const where = {
-    tenantId,
-    OR: searchByShipping
-      ? [{ shippingId: resolvedCode }]
-      : [{ packId: resolvedCode }, { id: resolvedCode }],
-  };
-
+  const where = buildWhere(tenantId, resolvedCode, searchByShipping);
   const orders = await prisma.order.findMany({ where, include: { orderItems: true } });
 
   if (!orders.length)                              throw new Error("Orden no encontrada");
@@ -346,19 +347,13 @@ export const scanOrder = async (tenantId, code) => {
     packedOrders:      orders.map(o => o.id),
   };
 };
-/* aa */
+
 export const packOrder = async (tenantId, code) => {
   const { resolvedCode, searchByShipping } = parseScannedCode(code);
 
   console.log(`📦 packOrder | resolved: ${resolvedCode} | tenantId: ${tenantId}`);
 
-  const where = {
-    tenantId,
-    OR: searchByShipping
-      ? [{ shippingId: resolvedCode }]
-      : [{ packId: resolvedCode }, { id: resolvedCode }],
-  };
-
+  const where = buildWhere(tenantId, resolvedCode, searchByShipping);
   const result = await prisma.order.updateMany({ where, data: { pickingStatus: "packed" } });
 
   if (result.count === 0) throw new Error("Orden no encontrada o no pertenece a este tenant");
