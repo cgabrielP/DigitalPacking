@@ -184,33 +184,39 @@ const syncAccount = async (account, tenantId) => {
         );
 
         const s  = shipmentRes.data;
-        const lt = s.lead_time ?? {};
+        const so = s.shipping_option ?? {}; // todos los campos de timing viven acá
 
-        // Campos existentes
+        // Campos base
         shippingStatus     = s.status ?? null;
         shippingSubstatus  = s.substatus ?? s.status ?? null;
         logisticType       = s.logistic?.type ?? null;
-        shippingOptionName = s.shipping_option?.name ?? null;
+        shippingOptionName = so.name ?? null;
 
-        // Timing — delivery_promise viene como string ISO en lead_time
-        deliveryPromise        = lt.delivery_promise ?? null;
-        estimatedDeliveryTime  = lt.estimated_delivery_time?.date
-                                   ? new Date(lt.estimated_delivery_time.date) : null;
-        estimatedDeliveryLimit = lt.estimated_delivery_limit?.date
-                                   ? new Date(lt.estimated_delivery_limit.date) : null;
-        estimatedDeliveryFinal = lt.estimated_delivery_final?.date
-                                   ? new Date(lt.estimated_delivery_final.date) : null;
+        // Timing — vienen todos dentro de shipping_option
+        // delivery_promise acá es un string descriptivo ("estimated", "exact"), NO una fecha.
+        // La fecha real a usar para urgencia es estimated_delivery_time.pay_before
+        // que indica hasta cuándo el vendedor puede pagar/despachar para cumplir el plazo.
+        deliveryPromise        = so.estimated_delivery_time?.pay_before ?? null; // cuándo debe despachar
+        estimatedDeliveryTime  = so.estimated_delivery_time?.date
+                                   ? new Date(so.estimated_delivery_time.date) : null;
+        estimatedDeliveryLimit = so.estimated_delivery_limit?.date
+                                   ? new Date(so.estimated_delivery_limit.date) : null;
+        estimatedDeliveryFinal = so.estimated_delivery_final?.date
+                                   ? new Date(so.estimated_delivery_final.date) : null;
 
-        // Shipping method
-        shippingMethodId   = lt.shipping_method?.id   ?? null;
+        // Shipping method — el ID está en shipping_option.shipping_method_id
+        // El name y type no están en este objeto, se toman de lead_time si existe
+        const lt = s.lead_time ?? {};
+        shippingMethodId   = so.shipping_method_id ?? lt.shipping_method?.id ?? null;
         shippingMethodName = lt.shipping_method?.name ?? null;
-        shippingMethodType = lt.shipping_method?.type ?? null;
+        shippingMethodType = lt.shipping_method?.type ?? so.delivery_type ?? null;
         shippingDeliverTo  = lt.shipping_method?.deliver_to ?? null;
 
         console.log(
           `🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}` +
-          ` | método: ${shippingMethodName ?? "—"} (${shippingMethodType ?? "—"})` +
-          ` | promesa despacho: ${deliveryPromise ?? "—"}`
+          ` | método: ${shippingOptionName ?? "—"} (id: ${shippingMethodId ?? "—"})` +
+          ` | despachar antes de: ${deliveryPromise ?? "—"}` +
+          ` | entrega estimada: ${estimatedDeliveryTime?.toISOString() ?? "—"}`
         );
       } catch (e) {
         console.error(`❌ [${label}] Error shipment ${shippingId}:`, e.response?.data);
