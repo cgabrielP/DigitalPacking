@@ -382,10 +382,14 @@ const resolveCategory = (status, substatus) => {
 };
 
 // ── Urgencia de despacho basada en delivery_promise ───────────────────────
-// "today"    → la promesa vence hoy (hay que despachar YA)
-// "overdue"  → la promesa ya venció (tarde)
-// "upcoming" → la promesa es en los próximos días (no urge hoy)
+// "overdue"  → la hora de corte ya pasó
+// "today"    → la hora de corte es hoy en timezone de Chile
+// "upcoming" → la hora de corte es en días futuros
 // "none"     → sin promesa definida
+//
+// El servidor corre en UTC pero ML envía el offset en el string
+// ej: "2026-03-11T16:45:00.000-03:00" → extraemos -03:00 y comparamos
+// el día calendario en esa timezone, no en UTC del servidor.
 
 const resolveDeliveryUrgency = (deliveryPromise) => {
   if (!deliveryPromise) return "none";
@@ -393,15 +397,26 @@ const resolveDeliveryUrgency = (deliveryPromise) => {
   const promise = new Date(deliveryPromise);
   const now     = new Date();
 
-  // Si la fecha ya pasó
+  // 1. ¿Ya pasó la hora exacta de corte? → overdue (UTC puro, siempre correcto)
   if (promise < now) return "overdue";
 
-  // Si vence hoy (mismo día calendario)
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  if (promise <= endOfToday) return "today";
+  // 2. Extraer offset del string de ML, ej: "-03:00" → -180 minutos
+  //    Fallback: Chile continental UTC-3
+  const offsetMatch = deliveryPromise.match(/([+-])(\d{2}):(\d{2})$/);
+  let offsetMinutes = -180;
+  if (offsetMatch) {
+    const sign = offsetMatch[1] === "+" ? 1 : -1;
+    offsetMinutes = sign * (parseInt(offsetMatch[2]) * 60 + parseInt(offsetMatch[3]));
+  }
 
-  return "upcoming";
+  // 3. Convertir fecha al día calendario local sumando el offset a UTC
+  const toLocalDateStr = (date) => {
+    const local = new Date(date.getTime() + offsetMinutes * 60 * 1000);
+    return local.getUTCFullYear() + "-" + local.getUTCMonth() + "-" + local.getUTCDate();
+  };
+
+  // 4. ¿Misma fecha local? → today. Si no → upcoming
+  return toLocalDateStr(promise) === toLocalDateStr(now) ? "today" : "upcoming";
 };
 
 // ─────────────────────────────────────────
