@@ -63,3 +63,24 @@ export const packOrderController = async (req, res) => {
   }
 };
 
+export const getLabelController = async (req, res) => {
+  try {
+    const { tenantId }  = req;
+    const { orderId }   = req.params;
+
+    const { stream, contentType, shippingId } =
+      await OrdersService.getShipmentLabel(tenantId, orderId);
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="etiqueta-${shippingId}.pdf"`
+    );
+
+    stream.pipe(res);
+  } catch (error) {
+    console.error("❌ getLabelController:", error.response?.data ?? error.message);
+    const status = error.response?.status ?? 500;
+    res.status(status).json({ error: error.message });
+  }
+};

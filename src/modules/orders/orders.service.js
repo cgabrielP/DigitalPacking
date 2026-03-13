@@ -471,3 +471,50 @@ export const packOrder = async (tenantId, code) => {
 
   return { message: "Orden empacada correctamente", updated: result.count };
 };
+
+// ─────────────────────────────────────────
+//  ETIQUETA DE ENVÍO
+// ─────────────────────────────────────────
+
+export const getShipmentLabel = async (tenantId, orderId) => {
+  // Buscar por id de orden o por packId (ambos tienen el mismo shippingId)
+  const order = await prisma.order.findFirst({
+    where: {
+      tenantId,
+      OR: [{ id: orderId }, { packId: orderId }],
+    },
+    include: { mlAccount: true },
+  });
+
+  if (!order)           throw new Error("Orden no encontrada");
+  if (!order.shippingId) throw new Error("La orden no tiene envío asociado");
+
+  // Refrescar token de la cuenta ML dueña de esta orden
+  let accessToken = order.mlAccount.accessToken;
+  try {
+    accessToken = await refreshAccessToken(order.mlAccount);
+  } catch {
+    console.warn("⚠️ No se pudo refrescar token para etiqueta, usando el actual");
+  }
+
+  const mlUserId = order.mlAccount.mlUserId;
+
+  console.log(`🏷️  Obteniendo etiqueta | shipmentId: ${order.shippingId} | seller: ${mlUserId}`);
+
+  // ML devuelve el PDF directamente como stream binario
+  const response = await axios.get("https://api.mercadolibre.com/shipment_labels", {
+    params: {
+      shipment_ids:  order.shippingId,
+      response_type: "pdf",
+      "caller.id":   mlUserId,
+    },
+    headers:      { Authorization: `Bearer ${accessToken}` },
+    responseType: "stream",
+  });
+
+  return {
+    stream:      response.data,
+    contentType: response.headers["content-type"] ?? "application/pdf",
+    shippingId:  order.shippingId,
+  };
+};
