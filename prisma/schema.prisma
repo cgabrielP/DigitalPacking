@@ -12,9 +12,10 @@ model Tenant {
   name      String?
   createdAt DateTime  @default(now())
 
-  mlAccounts MercadoLibreAccount[]
-  orders     Order[]
-  users      User[]
+  mlAccounts            MercadoLibreAccount[]
+  orders                Order[]
+  users                 User[]
+  deliveryPaymentConfig DeliveryPaymentConfig?
 }
 
 enum Role {
@@ -36,6 +37,8 @@ model User {
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  deliveryAssignments DeliveryAssignment[]
 
   @@unique([tenantId, email])
 }
@@ -69,31 +72,31 @@ model Order {
   buyerNickname String?
   packId        String?
 
-  pickingStatus      String    @default("pending")
-  shippingSubstatus  String?
-  shippingStatus     String?
-  shippingId         String?
-  logisticType       String?
-  shippingOptionName String?
-  deliveryPromise         String?    
-  estimatedDeliveryTime   DateTime?  
-  estimatedDeliveryLimit  DateTime?  
-  estimatedDeliveryFinal  DateTime?  
-  receiverCity String?
-  shippingMethodId        Int?      
-  shippingMethodName      String?    
-  shippingMethodType      String?    
-  shippingDeliverTo       String?    
-  lastUpdatedAt      DateTime?
-  createdAt          DateTime  @default(now())
+  pickingStatus           String    @default("pending")
+  shippingSubstatus       String?
+  shippingStatus          String?
+  shippingId              String?
+  logisticType            String?
+  shippingOptionName      String?
+  deliveryPromise         String?
+  estimatedDeliveryTime   DateTime?
+  estimatedDeliveryLimit  DateTime?
+  estimatedDeliveryFinal  DateTime?
+  receiverCity            String?
+  shippingMethodId        Int?
+  shippingMethodName      String?
+  shippingMethodType      String?
+  shippingDeliverTo       String?
+  lastUpdatedAt           DateTime?
+  createdAt               DateTime  @default(now())
 
   tenantId    String
   tenant      Tenant              @relation(fields: [tenantId], references: [id])
-
   mlAccountId String
   mlAccount   MercadoLibreAccount @relation(fields: [mlAccountId], references: [id])
 
-  orderItems OrderItem[]
+  orderItems          OrderItem[]
+  deliveryAssignment  DeliveryAssignment?
 }
 
 model OrderItem {
@@ -106,4 +109,30 @@ model OrderItem {
   quantity  Int
   variation String?
   createdAt DateTime @default(now())
+}
+
+model DeliveryAssignment {
+  id         String   @id @default(cuid())
+  assignedAt DateTime @default(now())
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  deliveryUserId String
+  deliveryUser   User   @relation(fields: [deliveryUserId], references: [id])
+
+  paymentAmount Float
+  notes         String?
+
+  @@index([deliveryUserId, assignedAt])
+}
+
+model DeliveryPaymentConfig {
+  id                String   @id @default(cuid())
+  amountPerDelivery Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
 }
