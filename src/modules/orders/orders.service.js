@@ -502,15 +502,19 @@ export const getShipmentLabel = async (tenantId, orderId) => {
   console.log(`🏷️  Obteniendo etiqueta | shipmentId: ${order.shippingId} | seller: ${mlUserId}`);
 
   // ML devuelve el PDF directamente como stream binario
-  const response = await axios.get("https://api.mercadolibre.com/shipment_labels", {
-    params: {
-      shipment_ids:  order.shippingId,
-      response_type: "pdf",
-      "caller.id":   mlUserId,
-    },
-    headers:      { Authorization: `Bearer ${accessToken}` },
-    responseType: "stream",
-  });
+ if (response.status !== 200) {
+  // Leer el stream para obtener el mensaje de error
+  const errorBody = await new Promise((resolve) => {
+    let raw = ""
+    response.data.on("data", chunk => raw += chunk)
+    response.data.on("end", () => {
+      try { resolve(JSON.parse(raw)) }
+      catch { resolve({ message: raw }) }
+    })
+  })
+  console.error("❌ ML shipment_labels error:", errorBody)
+  throw new Error(errorBody?.failed_shipments?.[0]?.error ?? "Error obteniendo etiqueta de ML")
+}
 
   return {
     stream:      response.data,
