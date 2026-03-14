@@ -22,6 +22,11 @@ export const getLogs = async (req, res) => {
         const logs = await LogService.getPackingLogs({ tenantId, userId, from, to });
         res.json(logs);
     } catch (error) {
+        console.error("❌ getLabelController:", {
+            status: error.response?.status,
+            data: error.response?.data,
+            orderId: req.params.orderId,
+        })
         res.status(500).json({ error: error.message });
     }
 };
