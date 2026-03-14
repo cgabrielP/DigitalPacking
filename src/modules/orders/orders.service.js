@@ -26,9 +26,9 @@ const fetchOrders = async (account, extraParams = "") => {
 };
 
 const fetchAllOrders = async (account) => {
-  const limit  = 50;
-  let   offset = 0;
-  let   allOrders = [];
+  const limit = 50;
+  let offset = 0;
+  let allOrders = [];
 
   // FIX 3 — Restar 5 min a lastSyncedAt para cubrir el "hueco" entre syncs
   const baseDate = account.lastSyncedAt ?? (() => {
@@ -36,7 +36,7 @@ const fetchAllOrders = async (account) => {
     d.setDate(d.getDate() - 14);
     return d;
   })();
-  const dateFrom    = new Date(baseDate.getTime() - 5 * 60 * 1000); // −5 min
+  const dateFrom = new Date(baseDate.getTime() - 5 * 60 * 1000); // −5 min
   const dateFromISO = dateFrom.toISOString();
 
   const isFirstSync = !account.lastSyncedAt;
@@ -74,7 +74,7 @@ const fetchThumbnail = async (item, accessToken) => {
     const data = itemRes.data;
     thumbnail =
       data.pictures?.find(p => p.secure_url)?.secure_url ??
-      data.pictures?.find(p => p.url)?.url               ??
+      data.pictures?.find(p => p.url)?.url ??
       data.thumbnail ?? null;
     if (thumbnail) return thumbnail.replace("http://", "https://");
   } catch (e) {
@@ -119,9 +119,9 @@ export const syncMercadoLibreOrders = async (tenantId) => {
   const totalOrders = results.reduce((acc, r) => acc + r.total, 0);
 
   return {
-    message:  `Sync completado — ${accounts.length} cuenta(s)`,
+    message: `Sync completado — ${accounts.length} cuenta(s)`,
     accounts: results,
-    total:    totalOrders,
+    total: totalOrders,
   };
 };
 
@@ -147,7 +147,7 @@ const syncAccount = async (account, tenantId) => {
   if (orders.length === 0) {
     await prisma.mercadoLibreAccount.update({
       where: { id: account.id },
-      data:  { lastSyncedAt: syncStartedAt },
+      data: { lastSyncedAt: syncStartedAt },
     });
     return { accountId: account.id, nickname: label, total: 0, message: "Sin cambios" };
   }
@@ -156,26 +156,26 @@ const syncAccount = async (account, tenantId) => {
     const shippingId = order.shipping?.id?.toString() ?? null;
 
     // ── Campos existentes ──────────────────────────────────────────────────
-    let shippingSubstatus  = null;
-    let shippingStatus     = null;
-    let logisticType       = null;
+    let shippingSubstatus = null;
+    let shippingStatus = null;
+    let logisticType = null;
     let shippingOptionName = null;
 
     // ── Nuevos campos de timing ────────────────────────────────────────────
     // delivery_promise: timestamp hasta el cual el vendedor debe despachar
     // para que el comprador reciba en el plazo comprometido.
     // Ejemplo: "2024-11-15T18:00:00.000-03:00" → despachar antes de las 18hs
-    let deliveryPromise        = null;
-    let estimatedDeliveryTime  = null; // fecha estimada de llegada al comprador
+    let deliveryPromise = null;
+    let estimatedDeliveryTime = null; // fecha estimada de llegada al comprador
     let estimatedDeliveryLimit = null; // fecha límite de entrega
     let estimatedDeliveryFinal = null; // fecha final comprometida (la más estricta)
 
     // ── Nuevos campos de método de envío y destino ────────────────────────
-    let shippingMethodId   = null;
+    let shippingMethodId = null;
     let shippingMethodName = null;
     let shippingMethodType = null;
-    let shippingDeliverTo  = null; // "residential", "agency", "pickup_point"
-    let receiverCity       = null; // comuna/ciudad destino, ej: "San Miguel"
+    let shippingDeliverTo = null; // "residential", "agency", "pickup_point"
+    let receiverCity = null; // comuna/ciudad destino, ej: "San Miguel"
 
     if (shippingId) {
       try {
@@ -184,37 +184,37 @@ const syncAccount = async (account, tenantId) => {
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
-        const s  = shipmentRes.data;
+        const s = shipmentRes.data;
         const so = s.shipping_option ?? {}; // todos los campos de timing viven acá
 
         // Campos base
-        shippingStatus     = s.status ?? null;
-        shippingSubstatus  = s.substatus ?? s.status ?? null;
-        logisticType       = s.logistic?.type ?? null;
+        shippingStatus = s.status ?? null;
+        shippingSubstatus = s.substatus ?? s.status ?? null;
+        logisticType = s.logistic?.type ?? null;
         shippingOptionName = so.name ?? null;
 
         // Timing — vienen todos dentro de shipping_option
         // delivery_promise acá es un string descriptivo ("estimated", "exact"), NO una fecha.
         // La fecha real a usar para urgencia es estimated_delivery_time.pay_before
         // que indica hasta cuándo el vendedor puede pagar/despachar para cumplir el plazo.
-        deliveryPromise        = so.estimated_delivery_time?.pay_before ?? null; // cuándo debe despachar
-        estimatedDeliveryTime  = so.estimated_delivery_time?.date
-                                   ? new Date(so.estimated_delivery_time.date) : null;
+        deliveryPromise = so.estimated_delivery_time?.pay_before ?? null; // cuándo debe despachar
+        estimatedDeliveryTime = so.estimated_delivery_time?.date
+          ? new Date(so.estimated_delivery_time.date) : null;
         estimatedDeliveryLimit = so.estimated_delivery_limit?.date
-                                   ? new Date(so.estimated_delivery_limit.date) : null;
+          ? new Date(so.estimated_delivery_limit.date) : null;
         estimatedDeliveryFinal = so.estimated_delivery_final?.date
-                                   ? new Date(so.estimated_delivery_final.date) : null;
+          ? new Date(so.estimated_delivery_final.date) : null;
 
         // Shipping method
         const lt = s.lead_time ?? {};
-        shippingMethodId   = so.shipping_method_id ?? lt.shipping_method?.id ?? null;
+        shippingMethodId = so.shipping_method_id ?? lt.shipping_method?.id ?? null;
         shippingMethodName = so.name ?? lt.shipping_method?.name ?? null; // "Prioritario a domicilio"
         shippingMethodType = lt.shipping_method?.type ?? so.delivery_type ?? null;
 
         // receiver_address tiene la preferencia de entrega y la ciudad/comuna destino
-        const ra          = s.receiver_address ?? {};
+        const ra = s.receiver_address ?? {};
         shippingDeliverTo = ra.delivery_preference ?? null; // "residential", "agency"
-        receiverCity      = ra.city?.name ?? ra.neighborhood?.name ?? null; // "San Miguel"
+        receiverCity = ra.city?.name ?? ra.neighborhood?.name ?? null; // "San Miguel"
 
         console.log(
           `🚚 [${label}] Shipment ${shippingId} | ${shippingStatus} | ${shippingSubstatus}` +
@@ -231,16 +231,16 @@ const syncAccount = async (account, tenantId) => {
     await prisma.order.upsert({
       where: { id: order.id.toString() },
       update: {
-        status:            order.status,
-        totalAmount:       order.total_amount,
+        status: order.status,
+        totalAmount: order.total_amount,
         shippingId,
         shippingStatus,
         shippingSubstatus,
         logisticType,
         shippingOptionName,
-        packId:            order.pack_id?.toString() ?? null,
-        lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
-        mlAccountId:       account.id,
+        packId: order.pack_id?.toString() ?? null,
+        lastUpdatedAt: order.date_last_updated ? new Date(order.date_last_updated) : null,
+        mlAccountId: account.id,
         // Nuevos campos
         deliveryPromise,
         estimatedDeliveryTime,
@@ -253,19 +253,19 @@ const syncAccount = async (account, tenantId) => {
         receiverCity,
       },
       create: {
-        id:                order.id.toString(),
-        status:            order.status,
-        totalAmount:       order.total_amount,
-        buyerNickname:     order.buyer?.nickname,
+        id: order.id.toString(),
+        status: order.status,
+        totalAmount: order.total_amount,
+        buyerNickname: order.buyer?.nickname,
         shippingId,
         shippingStatus,
         shippingSubstatus,
         logisticType,
         shippingOptionName,
         tenantId,
-        mlAccountId:       account.id,
-        packId:            order.pack_id?.toString() ?? null,
-        lastUpdatedAt:     order.date_last_updated ? new Date(order.date_last_updated) : null,
+        mlAccountId: account.id,
+        packId: order.pack_id?.toString() ?? null,
+        lastUpdatedAt: order.date_last_updated ? new Date(order.date_last_updated) : null,
         // Nuevos campos
         deliveryPromise,
         estimatedDeliveryTime,
@@ -285,11 +285,11 @@ const syncAccount = async (account, tenantId) => {
       order.order_items.map(async (item) => {
         const thumbnail = await fetchThumbnail(item, accessToken);
         return {
-          orderId:   order.id.toString(),
-          itemId:    item.item.id,
-          title:     item.item.title,
+          orderId: order.id.toString(),
+          itemId: item.item.id,
+          title: item.item.title,
           thumbnail,
-          quantity:  item.quantity,
+          quantity: item.quantity,
           variation: item.variation_attributes
             ?.map(v => `${v.name}: ${v.value_name}`)
             .join(", ") ?? null,
@@ -305,15 +305,15 @@ const syncAccount = async (account, tenantId) => {
 
   await prisma.mercadoLibreAccount.update({
     where: { id: account.id },
-    data:  { lastSyncedAt: syncStartedAt },
+    data: { lastSyncedAt: syncStartedAt },
   });
 
   console.log(`✅ [${label}] lastSyncedAt → ${syncStartedAt.toISOString()}`);
 
   return {
     accountId: account.id,
-    nickname:  label,
-    total:     orders.length,
+    nickname: label,
+    total: orders.length,
     lastSyncedAt: syncStartedAt,
   };
 };
@@ -324,17 +324,17 @@ const syncAccount = async (account, tenantId) => {
 
 export const getOrdersFromDB = async (tenantId) => {
   const orders = await prisma.order.findMany({
-    where:   { tenantId },
+    where: { tenantId },
     include: { orderItems: true },
     orderBy: { createdAt: "desc" },
   });
 
   const packsMap = new Map();
-  const result   = [];
+  const result = [];
 
   for (const order of orders) {
-    const shippingCategory  = resolveCategory(order.shippingStatus, order.shippingSubstatus);
-    const deliveryUrgency   = resolveDeliveryUrgency(order.deliveryPromise);
+    const shippingCategory = resolveCategory(order.shippingStatus, order.shippingSubstatus);
+    const deliveryUrgency = resolveDeliveryUrgency(order.deliveryPromise);
 
     if (order.packId) {
       if (!packsMap.has(order.packId)) {
@@ -343,7 +343,7 @@ export const getOrdersFromDB = async (tenantId) => {
           shippingCategory,
           deliveryUrgency,
           displayIdentifier: order.packId,
-          orderItems:   [...order.orderItems],
+          orderItems: [...order.orderItems],
           packedOrders: [order.id],
         });
         result.push(packsMap.get(order.packId));
@@ -370,14 +370,14 @@ export const getOrdersFromDB = async (tenantId) => {
 // ── Categoría de envío (existente) ────────────────────────────────────────
 
 const resolveCategory = (status, substatus) => {
-  if (["delivered", "not_delivered"].includes(status))       return "finalizados";
-  if (["delivered", "stolen", "lost"].includes(substatus))   return "finalizados";
-  if (status === "shipped")                                  return "en_transito";
+  if (["delivered", "not_delivered"].includes(status)) return "finalizados";
+  if (["delivered", "stolen", "lost"].includes(substatus)) return "finalizados";
+  if (status === "shipped") return "en_transito";
   if ([
     "in_hub", "in_packing_list", "dropped_off", "picked_up",
     "receiver_absent", "rescheduled", "returning", "returned",
-  ].includes(substatus))                                     return "en_transito";
-  if (["ready_to_print", "printed"].includes(substatus))     return "por_despachar";
+  ].includes(substatus)) return "en_transito";
+  if (["ready_to_print", "printed"].includes(substatus)) return "por_despachar";
   return "por_despachar";
 };
 
@@ -395,7 +395,7 @@ const resolveDeliveryUrgency = (deliveryPromise) => {
   if (!deliveryPromise) return "none";
 
   const promise = new Date(deliveryPromise);
-  const now     = new Date();
+  const now = new Date();
 
   // 1. ¿Ya pasó la hora exacta de corte? → overdue (UTC puro, siempre correcto)
   if (promise < now) return "overdue";
@@ -444,18 +444,18 @@ export const scanOrder = async (tenantId, code) => {
   const where = buildWhere(tenantId, resolvedCode, searchByShipping);
   const orders = await prisma.order.findMany({ where, include: { orderItems: true } });
 
-  if (!orders.length)                              throw new Error("Orden no encontrada");
+  if (!orders.length) throw new Error("Orden no encontrada");
   if (orders.every(o => o.pickingStatus === "completed")) throw new Error("La orden ya fue completada");
 
   await prisma.order.updateMany({ where, data: { pickingStatus: "scanned" } });
 
   return {
     displayIdentifier: orders[0].packId ?? orders[0].id,
-    buyerNickname:     orders[0].buyerNickname,
-    totalAmount:       orders.reduce((acc, o) => acc + o.totalAmount, 0),
-    pickingStatus:     "scanned",
-    orderItems:        orders.flatMap(o => o.orderItems),
-    packedOrders:      orders.map(o => o.id),
+    buyerNickname: orders[0].buyerNickname,
+    totalAmount: orders.reduce((acc, o) => acc + o.totalAmount, 0),
+    pickingStatus: "scanned",
+    orderItems: orders.flatMap(o => o.orderItems),
+    packedOrders: orders.map(o => o.id),
   };
 };
 
@@ -486,7 +486,7 @@ export const getShipmentLabel = async (tenantId, orderId) => {
     include: { mlAccount: true },
   });
 
-  if (!order)           throw new Error("Orden no encontrada");
+  if (!order) throw new Error("Orden no encontrada");
   if (!order.shippingId) throw new Error("La orden no tiene envío asociado");
 
   // Refrescar token de la cuenta ML dueña de esta orden
@@ -501,24 +501,34 @@ export const getShipmentLabel = async (tenantId, orderId) => {
 
   console.log(`🏷️  Obteniendo etiqueta | shipmentId: ${order.shippingId} | seller: ${mlUserId}`);
 
-  // ML devuelve el PDF directamente como stream binario
- if (response.status !== 200) {
-  // Leer el stream para obtener el mensaje de error
-  const errorBody = await new Promise((resolve) => {
-    let raw = ""
-    response.data.on("data", chunk => raw += chunk)
-    response.data.on("end", () => {
-      try { resolve(JSON.parse(raw)) }
-      catch { resolve({ message: raw }) }
+  const response = await axios.get("https://api.mercadolibre.com/shipment_labels", {
+    params: {
+      shipment_ids: order.shippingId,
+      response_type: "pdf",
+      "caller.id": mlUserId,
+    },
+    headers: { Authorization: `Bearer ${accessToken}` },
+    responseType: "stream",
+  });
+
+  // axios con responseType stream no lanza error en 4xx — hay que chequearlo manualmente
+  if (response.status !== 200) {
+    // Leer el stream para obtener el mensaje de error
+    const errorBody = await new Promise((resolve) => {
+      let raw = ""
+      response.data.on("data", chunk => raw += chunk)
+      response.data.on("end", () => {
+        try { resolve(JSON.parse(raw)) }
+        catch { resolve({ message: raw }) }
+      })
     })
-  })
-  console.error("❌ ML shipment_labels error:", errorBody)
-  throw new Error(errorBody?.failed_shipments?.[0]?.error ?? "Error obteniendo etiqueta de ML")
-}
+    console.error("❌ ML shipment_labels error:", errorBody)
+    throw new Error(errorBody?.failed_shipments?.[0]?.error ?? "Error obteniendo etiqueta de ML")
+  }
 
   return {
-    stream:      response.data,
+    stream: response.data,
     contentType: response.headers["content-type"] ?? "application/pdf",
-    shippingId:  order.shippingId,
+    shippingId: order.shippingId,
   };
 };
