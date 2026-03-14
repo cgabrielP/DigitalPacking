@@ -3,6 +3,7 @@ import authRoutes from "./modules/auth/auth.routes.js";
 import ordersRoutes from "./modules/orders/orders.routes.js"
 import adminRoutes from "./modules/admin/admin.routes.js";
 import deliveryRoutes from "./modules/delivery/delivery.routes.js"
+import logRoutes from "./modules/log/log.routes.js"
 import cors from "cors";
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/auth", authRoutes);
 app.use("/orders", ordersRoutes);
 app.use("/admin", adminRoutes)
 app.use("/delivery", deliveryRoutes);
+app.use("/api/log", logRoutes);
 
 
 export default app;

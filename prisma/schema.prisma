@@ -15,6 +15,7 @@ model Tenant {
   mlAccounts            MercadoLibreAccount[]
   orders                Order[]
   users                 User[]
+  packingLogs PackingLog[]
   deliveryPaymentConfig DeliveryPaymentConfig?
 }
 
@@ -39,6 +40,7 @@ model User {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   deliveryAssignments DeliveryAssignment[]
+  packingLogs PackingLog[]
 
   @@unique([tenantId, email])
 }
@@ -97,6 +99,26 @@ model Order {
 
   orderItems          OrderItem[]
   deliveryAssignment  DeliveryAssignment?
+  packingLogs PackingLog[]
+}
+
+model PackingLog {
+  id       String   @id @default(cuid())
+  packedAt DateTime @default(now())
+  notes    String?
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  action   String  @default("packed") 
+
+  @@index([tenantId, packedAt])
+  @@index([userId, packedAt])
 }
 
 model OrderItem {
