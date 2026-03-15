@@ -79,8 +79,22 @@ export const getLabelController = async (req, res) => {
 
     stream.pipe(res);
   } catch (error) {
-    console.error("❌ getLabelController:", error.response?.data ?? error.message);
-    const status = error.response?.status ?? 500;
-    res.status(status).json({ error: error.message });
+    if (error.response?.data?.on) {
+    const chunks = []
+    for await (const chunk of error.response.data) chunks.push(chunk)
+    const body = Buffer.concat(chunks).toString()
+    try {
+      const parsed = JSON.parse(body)
+      const mlError = parsed?.failed_shipments?.[0]
+      console.error("❌ ML shipment_labels:", mlError)
+      return res.status(400).json({ error: mlError?.error ?? body })
+    } catch {
+      console.error("❌ ML raw:", body)
+      return res.status(400).json({ error: body })
+    }
+  }
+
+  console.error("❌ getLabelController:", error.message)
+  res.status(error.response?.status ?? 500).json({ error: error.message })
   }
 };
