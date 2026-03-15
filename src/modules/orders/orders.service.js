@@ -488,6 +488,9 @@ export const getShipmentLabel = async (tenantId, orderId) => {
 
   if (!order) throw new Error("Orden no encontrada");
   if (!order.shippingId) throw new Error("La orden no tiene envío asociado");
+  if (['shipped', 'delivered', 'not_delivered'].includes(order.shippingStatus)) {
+    throw new Error(`La etiqueta no está disponible — el envío ya está en estado "${order.shippingStatus}"`)
+  }
 
   // Refrescar token de la cuenta ML dueña de esta orden
   let accessToken = order.mlAccount.accessToken;
