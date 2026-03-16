@@ -446,7 +446,9 @@ export const scanOrder = async (tenantId, code) => {
 
   if (!orders.length) throw new Error("Orden no encontrada");
   if (orders.every(o => o.pickingStatus === "completed")) throw new Error("La orden ya fue completada");
-
+  if (orders.every(o => o.pickingStatus === "scanned" || o.pickingStatus === "packed")) {
+    throw new Error("La orden ya fue escaneada o empacada");
+  }
   await prisma.order.updateMany({ where, data: { pickingStatus: "scanned" } });
 
   return {
