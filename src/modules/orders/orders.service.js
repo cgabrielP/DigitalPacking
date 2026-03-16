@@ -445,20 +445,22 @@ export const scanOrder = async (tenantId, code) => {
   const orders = await prisma.order.findMany({ where, include: { orderItems: true } });
 
   if (!orders.length) throw new Error("Orden no encontrada");
-  if (orders.every(o => o.pickingStatus === "completed")) throw new Error("La orden ya fue completada");
-  if (orders.every(o => o.pickingStatus === "scanned" || o.pickingStatus === "packed")) {
-    throw new Error("La orden ya fue escaneada o empacada");
-  }
-  await prisma.order.updateMany({ where, data: { pickingStatus: "scanned" } });
+if (orders.every(o => o.pickingStatus === "completed")) throw new Error("La orden ya fue completada");
 
-  return {
-    displayIdentifier: orders[0].packId ?? orders[0].id,
-    buyerNickname: orders[0].buyerNickname,
-    totalAmount: orders.reduce((acc, o) => acc + o.totalAmount, 0),
-    pickingStatus: "scanned",
-    orderItems: orders.flatMap(o => o.orderItems),
-    packedOrders: orders.map(o => o.id),
-  };
+const alreadyProcessed = orders.every(o => o.pickingStatus === "scanned" || o.pickingStatus === "packed")
+
+if (!alreadyProcessed) {
+  await prisma.order.updateMany({ where, data: { pickingStatus: "scanned" } });
+}
+
+return {
+  displayIdentifier: orders[0].packId ?? orders[0].id,
+  buyerNickname:     orders[0].buyerNickname,
+  totalAmount:       orders.reduce((acc, o) => acc + o.totalAmount, 0),
+  pickingStatus:     alreadyProcessed ? orders[0].pickingStatus : "scanned",
+  orderItems:        orders.flatMap(o => o.orderItems),
+  packedOrders:      orders.map(o => o.id),
+};
 };
 
 export const packOrder = async (tenantId, code) => {
