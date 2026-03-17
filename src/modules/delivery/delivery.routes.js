@@ -7,20 +7,17 @@ import {
   getAssignmentsController,
   getDeliveryReportController,
 } from "./delivery.controller.js";
-import { authenticate, requireRole } from "../auth/auth.middleware.js";
+import { authenticate, checkSubscription, requireRole } from "../auth/auth.middleware.js";
 
 const router = Router();
 
-// ── Config de pago — solo ADMIN ──────────────────────────────────────────────
-router.get("/config",  authenticate, requireRole("ADMIN"), getPaymentConfigController);
-router.post("/config", authenticate, requireRole("ADMIN"), upsertPaymentConfigController);
+router.get("/config",              authenticate, checkSubscription, requireRole("ADMIN"), getPaymentConfigController);
+router.post("/config",             authenticate, checkSubscription, requireRole("ADMIN"), upsertPaymentConfigController);
 
-// ── Asignaciones — ADMIN y SUPERVISOR asignan, DELIVERY solo lee las suyas ──
-router.post("/assign",               authenticate, requireRole("ADMIN", "SUPERVISOR"), assignOrderController);
-router.delete("/assign/:orderId",    authenticate, requireRole("ADMIN", "SUPERVISOR"), unassignOrderController);
-router.get("/assignments",           authenticate, getAssignmentsController);
+router.post("/assign",             authenticate, checkSubscription, requireRole("ADMIN", "SUPERVISOR"), assignOrderController);
+router.delete("/assign/:orderId",  authenticate, checkSubscription, requireRole("ADMIN", "SUPERVISOR"), unassignOrderController);
+router.get("/assignments",         authenticate, checkSubscription, getAssignmentsController);
 
-// ── Reporte de pagos — ADMIN, SUPERVISOR y el propio DELIVERY ───────────────
-router.get("/report", authenticate, getDeliveryReportController);
+router.get("/report",              authenticate, checkSubscription, getDeliveryReportController);
 
 export default router;

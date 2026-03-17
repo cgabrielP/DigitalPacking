@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { getUsers, createUser, deactivateUser, updateUserRole } from "./admin.controller.js";
-import { authenticate, requireRole } from "../auth/auth.middleware.js";
+import { authenticate, checkSubscription, requireRole } from "../auth/auth.middleware.js";
 
 const router = Router();
 
-// Todas las rutas requieren autenticación
-router.use(authenticate);
+router.use(authenticate, checkSubscription); 
 
 // SUPERVISOR puede leer usuarios (para poblar el dropdown de delivery en AssignDelivery)
 router.get("/users", requireRole("ADMIN", "SUPERVISOR"), getUsers);
