@@ -53,7 +53,7 @@ export const checkSubscription = async (req, res, next) => {
     return res.status(403).json({ error: "Sin suscripción activa" });
   }
 
-  // Si es TRIAL, verificar si ya venció
+  console.log("CHECK SUBSCRIPTION:", tenantId, subscription); 
   if (subscription.plan === "TRIAL" && subscription.status === "ACTIVE") {
     if (new Date() > new Date(subscription.trialEndsAt)) {
       await prisma.subscription.update({
