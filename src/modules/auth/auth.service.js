@@ -12,9 +12,6 @@ const { ML_CLIENT_ID, ML_CLIENT_SECRET, ML_REDIRECT_URI } = process.env;
 const signToken = (payload) =>
   jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-// ─────────────────────────────────────────
-//  REGISTRO
-// ─────────────────────────────────────────
 
 export const registerUser = async ({ name, email, password, tenantName }) => {
   // 1. Verificar si el email ya existe globalmente
@@ -52,9 +49,6 @@ export const registerUser = async ({ name, email, password, tenantName }) => {
   return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, tenant };
 };
 
-// ─────────────────────────────────────────
-//  LOGIN
-// ─────────────────────────────────────────
 
 export const loginUser = async ({ email, password }) => {
   const user = await prisma.user.findFirst({
@@ -67,16 +61,22 @@ export const loginUser = async ({ email, password }) => {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) throw new Error("Credenciales inválidas");
 
+  const subscription = await prisma.subscription.findUnique({
+    where: { tenantId: user.tenantId },
+  });
+
   const token = signToken({
-    userId:   user.id,
-    tenantId: user.tenantId,
-    role:     user.role,
-    name: user.name
+    userId:      user.id,
+    tenantId:    user.tenantId,
+    role:        user.role,
+    name:        user.name,
+    plan:        subscription?.plan        ?? "TRIAL",
+    trialEndsAt: subscription?.trialEndsAt ?? null,
   });
 
   return {
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user:   { id: user.id, name: user.name, email: user.email, role: user.role },
     tenant: { id: user.tenant.id, name: user.tenant.name },
   };
 };
