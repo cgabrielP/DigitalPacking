@@ -48,6 +48,22 @@ export const createManualOrder = async (tenantId, { buyerNickname, receiverCity,
     return order;
 };
 
+export const deleteManualOrder = async (tenantId, orderId) => {
+    const order = await prisma.order.findFirst({
+        where: { id: orderId, tenantId, status: "manual" },
+    });
+    if (!order) throw new Error("Orden manual no encontrada");
+
+    // Solo borrar si no tiene assignment (no fue asignada aún)
+    const assignment = await prisma.deliveryAssignment.findUnique({
+        where: { orderId },
+    });
+    if (assignment) throw new Error("No se puede eliminar una orden que ya fue asignada");
+
+    await prisma.order.delete({ where: { id: orderId } });
+    return { message: "Orden manual eliminada" };
+};
+
 // ─────────────────────────────────────────
 //  ASSIGN
 // ─────────────────────────────────────────

@@ -35,6 +35,15 @@ export const createManualOrderController = async (req, res) => {
   }
 };
 
+export const deleteManualOrderController = async (req, res) => {
+  try {
+    const result = await DeliveryService.deleteManualOrder(req.tenantId, req.params.orderId);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 export const assignOrderController = async (req, res) => {
   try {
     const assignment = await DeliveryService.assignOrder(req.tenantId, req.body);
