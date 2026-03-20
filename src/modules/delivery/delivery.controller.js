@@ -22,6 +22,19 @@ export const upsertPaymentConfigController = async (req, res) => {
   }
 };
 
+export const createManualOrderController = async (req, res) => {
+  try {
+    const { buyerNickname, receiverCity, notes } = req.body;
+    if (!buyerNickname) {
+      return res.status(400).json({ error: "buyerNickname es requerido" });
+    }
+    const order = await DeliveryService.createManualOrder(req.tenantId, { buyerNickname, receiverCity, notes });
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 export const assignOrderController = async (req, res) => {
   try {
     const assignment = await DeliveryService.assignOrder(req.tenantId, req.body);

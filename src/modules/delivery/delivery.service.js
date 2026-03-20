@@ -20,6 +20,35 @@ export const upsertPaymentConfig = async (tenantId, amountPerDelivery) => {
 };
 
 // ─────────────────────────────────────────
+//  MANUAL ORDER (for direct delivery assignment)
+// ─────────────────────────────────────────
+
+export const createManualOrder = async (tenantId, { buyerNickname, receiverCity, notes }) => {
+    // Necesitamos una mlAccount del tenant para satisfacer el FK
+    const mlAccount = await prisma.mercadoLibreAccount.findFirst({
+        where: { tenantId, isActive: true },
+    });
+    if (!mlAccount) throw new Error("No hay cuenta de Mercado Libre conectada. Conecta una cuenta primero.");
+
+    const id = `MANUAL-${Date.now()}`;
+
+    const order = await prisma.order.create({
+        data: {
+            id,
+            status: "manual",
+            totalAmount: 0,
+            buyerNickname: buyerNickname || null,
+            receiverCity: receiverCity || null,
+            pickingStatus: "completed",
+            tenantId,
+            mlAccountId: mlAccount.id,
+        },
+    });
+
+    return order;
+};
+
+// ─────────────────────────────────────────
 //  ASSIGN
 // ─────────────────────────────────────────
 
