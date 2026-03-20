@@ -69,33 +69,45 @@ export const deleteManualOrder = async (tenantId, orderId) => {
 // ─────────────────────────────────────────
 
 export const assignOrder = async (tenantId, { orderId, deliveryUserId, notes }) => {
-    // Verificar que la orden pertenece al tenant
-    const order = await prisma.order.findFirst({
-        where: { id: orderId, tenantId },
-    });
-    if (!order) throw new Error("Orden no encontrada");
+    console.log("[assignOrder] input:", { tenantId, orderId, deliveryUserId, notes });
 
-    // Verificar que el delivery pertenece al tenant y tiene rol DELIVERY
-    const deliveryUser = await prisma.user.findFirst({
-        where: { id: deliveryUserId, tenantId, role: "DELIVERY", isActive: true },
-    });
-    if (!deliveryUser) throw new Error("Usuario delivery no encontrado");
+    try {
+        // Verificar que la orden pertenece al tenant
+        const order = await prisma.order.findFirst({
+            where: { id: orderId, tenantId },
+        });
+        console.log("[assignOrder] order found:", order);
+        if (!order) throw new Error("Orden no encontrada");
 
-    // Leer monto vigente del config
-    const config = await prisma.deliveryPaymentConfig.findUnique({
-        where: { tenantId },
-    });
-    if (!config) throw new Error("No hay configuración de pago definida. Configura el monto por delivery primero.");
+        // Verificar que el delivery pertenece al tenant y tiene rol DELIVERY
+        const deliveryUser = await prisma.user.findFirst({
+            where: { id: deliveryUserId, tenantId, role: "DELIVERY", isActive: true },
+        });
+        console.log("[assignOrder] deliveryUser found:", deliveryUser);
+        if (!deliveryUser) throw new Error("Usuario delivery no encontrado");
 
-    // Crear o reasignar (si ya existía un assignment para esta orden, lo reemplaza)
-    const assignment = await prisma.deliveryAssignment.upsert({
-        where: { orderId },
-        update: { deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
-        create: { orderId, deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
-        include: { deliveryUser: { select: { id: true, name: true } } },
-    });
+        // Leer monto vigente del config
+        const config = await prisma.deliveryPaymentConfig.findUnique({
+            where: { tenantId },
+        });
+        console.log("[assignOrder] payment config:", config);
+        if (!config) throw new Error("No hay configuración de pago definida. Configura el monto por delivery primero.");
 
-    return assignment;
+        // Crear o reasignar (si ya existía un assignment para esta orden, lo reemplaza)
+        const assignment = await prisma.deliveryAssignment.upsert({
+            where: { orderId },
+            update: { deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
+            create: { orderId, deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
+            include: { deliveryUser: { select: { id: true, name: true } } },
+        });
+        console.log("[assignOrder] upserted assignment:", assignment);
+
+        return assignment;
+    } catch (error) {
+        console.error("[assignOrder] ERROR:", error.message);
+        console.error("[assignOrder] Stack:", error.stack);
+        throw error;
+    }
 };
 
 export const unassignOrder = async (tenantId, orderId) => {
