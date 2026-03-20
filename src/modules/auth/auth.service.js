@@ -14,12 +14,10 @@ const signToken = (payload) =>
 
 
 export const registerUser = async ({ name, email, password, tenantName }) => {
-  // 1. Verificar si el email ya existe globalmente
   const existing = await prisma.user.findFirst({ where: { email } });
   if (existing) throw new Error("El email ya está registrado");
 
-  // 2. Crear tenant + usuario ADMIN en una transacción
-  const { user, tenant } = await prisma.$transaction(async (tx) => {
+  const { user, tenant, subscription } = await prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
       data: { name: tenantName ?? `Empresa de ${name}` },
     });
@@ -27,26 +25,37 @@ export const registerUser = async ({ name, email, password, tenantName }) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await tx.user.create({
+      data: { email, passwordHash, name, role: "ADMIN", tenantId: tenant.id },
+    });
+
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const subscription = await tx.subscription.create({
       data: {
-        email,
-        passwordHash,
-        name,
-        role: "ADMIN",
-        tenantId: tenant.id,
+        tenantId:    tenant.id,
+        plan:        "TRIAL",
+        status:      "ACTIVE",
+        trialEndsAt,
       },
     });
 
-    return { user, tenant };
+    return { user, tenant, subscription };
   });
 
   const token = signToken({
-    userId:   user.id,
-    tenantId: tenant.id,
-    role:     user.role,
-    name: user.name
+    userId:      user.id,
+    tenantId:    tenant.id,
+    role:        user.role,
+    name:        user.name,
+    plan:        "TRIAL",
+    trialEndsAt: subscription.trialEndsAt,
   });
 
-  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, tenant };
+  return {
+    token,
+    user:   { id: user.id, name: user.name, email: user.email, role: user.role },
+    tenant: { id: tenant.id, name: tenant.name },
+  };
 };
 
 
