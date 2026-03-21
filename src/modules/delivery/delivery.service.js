@@ -96,7 +96,7 @@ export const assignOrder = async (tenantId, { orderId, deliveryUserId, notes }) 
         // Crear o reasignar (si ya existía un assignment para esta orden, lo reemplaza)
         const assignment = await prisma.deliveryAssignment.upsert({
             where: { orderId },
-            update: { deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
+            update: { deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null, assignedAt: new Date() },
             create: { orderId, deliveryUserId, paymentAmount: config.amountPerDelivery, notes: notes ?? null },
             include: { deliveryUser: { select: { id: true, name: true } } },
         });

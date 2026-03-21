@@ -325,7 +325,16 @@ const syncAccount = async (account, tenantId) => {
 export const getOrdersFromDB = async (tenantId) => {
   const orders = await prisma.order.findMany({
     where: { tenantId },
-    include: { orderItems: true },
+    include: {
+      orderItems: true,
+      deliveryAssignment: {
+        select: {
+          id: true,
+          deliveryUserId: true,
+          deliveryUser: { select: { id: true, name: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 
