@@ -1,4 +1,5 @@
 import * as authService from "./auth.service.js";
+import validator from "validator";
 
 // ─────────────────────────────────────────
 //  REGISTRO
@@ -11,7 +12,19 @@ export const register = async (req, res) => {
     if (!name || !email || !password)
       return res.status(400).json({ error: "name, email y password son requeridos" });
 
-    const result = await authService.registerUser({ name, email, password, tenantName });
+    if (!validator.isEmail(email))
+      return res.status(400).json({ error: "Email inválido" });
+
+    const sanitizedName = validator.escape(name.trim());
+    const normalizedEmail = email.toLowerCase().trim();
+    const sanitizedTenantName = tenantName ? validator.escape(tenantName.trim()) : undefined;
+
+    const result = await authService.registerUser({
+      name: sanitizedName,
+      email: normalizedEmail,
+      password,
+      tenantName: sanitizedTenantName,
+    });
     res.status(201).json(result);
   } catch (error) {
     const isKnown = error.message === "El email ya está registrado";
@@ -30,7 +43,12 @@ export const login = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: "email y password son requeridos" });
 
-    const result = await authService.loginUser({ email, password });
+    if (!validator.isEmail(email))
+      return res.status(400).json({ error: "Email inválido" });
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const result = await authService.loginUser({ email: normalizedEmail, password });
     res.json(result);
   } catch (error) {
     const isKnown = error.message === "Credenciales inválidas";

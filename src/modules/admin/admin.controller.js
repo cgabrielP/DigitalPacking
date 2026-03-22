@@ -1,4 +1,5 @@
 import * as adminService from "./admin.service.js";
+import validator from "validator";
 
 const VALID_ROLES = ["ADMIN", "SUPERVISOR", "PICKER", "DELIVERY"];
 
@@ -26,13 +27,24 @@ export const createUser = async (req, res) => {
     if (!name || !email || !password || !role)
       return res.status(400).json({ error: "name, email, password y role son requeridos" });
 
+    if (!validator.isEmail(email))
+      return res.status(400).json({ error: "Email inválido" });
+
     if (!VALID_ROLES.includes(role))
       return res.status(400).json({ error: `Rol inválido. Válidos: ${VALID_ROLES.join(", ")}` });
 
     if (password.length < 8)
       return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
 
-    const user = await adminService.createUser(req.tenantId, { name, email, password, role });
+    const sanitizedName = validator.escape(name.trim());
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = await adminService.createUser(req.tenantId, {
+      name: sanitizedName,
+      email: normalizedEmail,
+      password,
+      role,
+    });
     res.status(201).json(user);
   } catch (error) {
     const isKnown = error.message === "El email ya existe en esta empresa";
