@@ -10,6 +10,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 const app = express();
 
+app.set("trust proxy", 1);
 app.use(helmet());
 
 const allowedOrigins = [
