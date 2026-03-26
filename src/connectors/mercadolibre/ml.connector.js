@@ -18,11 +18,12 @@ export default class MercadoLibreConnector extends MarketplaceConnector {
   async refreshAuth() {
     try {
       const updated = await refreshMlToken(this.credentials);
+      this.credentials = updated;
       this.accessToken = updated.accessToken;
       console.log(`🔑 [${this.label}] Token refrescado correctamente`);
       return updated;
     } catch (e) {
-      console.warn(`⚠️ [${this.label}] No se pudo refrescar token, se usa el actual`);
+      console.warn(`⚠️ [${this.label}] No se pudo refrescar token, se usa el actual:`, e.response?.data ?? e.message);
       return null;
     }
   }
@@ -38,6 +39,7 @@ export default class MercadoLibreConnector extends MarketplaceConnector {
     } catch (error) {
       if (error.response?.status === 401) {
         const updated = await refreshMlToken(this.credentials);
+        this.credentials = updated;
         this.accessToken = updated.accessToken;
         return axios.get(url, {
           headers: { Authorization: `Bearer ${this.accessToken}` },
