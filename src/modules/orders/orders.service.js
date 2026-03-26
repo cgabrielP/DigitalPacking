@@ -346,6 +346,7 @@ export const scanOrder = async (tenantId, code) => {
   return {
     displayIdentifier: orders[0].packId ?? orders[0].id,
     buyerNickname: orders[0].buyerNickname,
+    marketplace: orders[0].marketplace,
     totalAmount: orders.reduce((acc, o) => acc + o.totalAmount, 0),
     pickingStatus: alreadyProcessed ? orders[0].pickingStatus : "scanned",
     orderItems: orders.flatMap(o => o.orderItems),
