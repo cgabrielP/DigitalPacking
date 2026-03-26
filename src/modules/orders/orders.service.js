@@ -47,6 +47,19 @@ const syncAccount = async (account, tenantId) => {
     });
   }
 
+  // Resolve legacy mlAccountId for backward compat FK
+  let legacyMlAccountId = null;
+  if (account.marketplace === "MERCADOLIBRE") {
+    const mlUserId = account.credentials?.mlUserId;
+    if (mlUserId) {
+      const legacy = await prisma.mercadoLibreAccount.findFirst({
+        where: { tenantId, mlUserId },
+        select: { id: true },
+      });
+      legacyMlAccountId = legacy?.id ?? null;
+    }
+  }
+
   // 2. Calculate sync start date (same -5 min overlap logic)
   const baseDate = account.lastSyncedAt ?? (() => {
     const d = new Date();
@@ -95,7 +108,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodType:    raw.shippingMethodType,
         shippingDeliverTo:     raw.shippingDeliverTo,
         receiverCity:          raw.receiverCity,
-        mlAccountId:           account.id, // keep legacy FK in sync
+        mlAccountId:           legacyMlAccountId ?? account.id,
         // Normalized fields
         marketplace:           account.marketplace,
         externalOrderId:       order.externalOrderId,
@@ -128,7 +141,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodType:    raw.shippingMethodType,
         shippingDeliverTo:     raw.shippingDeliverTo,
         receiverCity:          raw.receiverCity,
-        mlAccountId:           account.id,
+        mlAccountId:           legacyMlAccountId ?? account.id,
         // Normalized fields
         marketplace:           account.marketplace,
         externalOrderId:       order.externalOrderId,
