@@ -13,6 +13,7 @@ model Tenant {
   createdAt DateTime  @default(now())
 
   mlAccounts            MercadoLibreAccount[]
+  marketplaceAccounts   MarketplaceAccount[]
   orders                Order[]
   users                 User[]
   packingLogs PackingLog[]
@@ -47,6 +48,26 @@ enum Role {
   SUPERVISOR
   PICKER
   DELIVERY
+}
+
+// ── Multi-marketplace enums ─────────────────────────────
+enum Marketplace {
+  MERCADOLIBRE
+  FALABELLA
+  RIPLEY
+  WALMART
+  HITES
+}
+
+enum OrderStatus {
+  PENDING
+  PICKED
+  PACKED
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  RETURNED
 }
 
 model User {
@@ -90,6 +111,32 @@ model MercadoLibreAccount {
   @@unique([tenantId, mlUserId])
 }
 
+// ── Normalized marketplace account ──────────────────────
+model MarketplaceAccount {
+  id           String      @id @default(uuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  marketplace  Marketplace
+  nickname     String      // Display name ("Mi cuenta Falabella")
+
+  // Credentials vary by marketplace, stored as JSON
+  // ML: { accessToken, refreshToken, expiresIn, tokenType, scope, mlUserId, email }
+  // Falabella: { apiKey, userId, apiUrl }
+  // Ripley/Mirakl: { apiKey, shopId }
+  // Walmart: { clientId, clientSecret }
+  credentials  Json
+
+  isActive     Boolean     @default(true)
+  lastSyncedAt DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  orders       Order[]     @relation("MarketplaceAccountOrders")
+
+  @@unique([tenantId, marketplace, nickname])
+  @@index([tenantId])
+}
+
 model Order {
   id            String  @id
   status        String
@@ -119,6 +166,21 @@ model Order {
   tenant      Tenant              @relation(fields: [tenantId], references: [id])
   mlAccountId String
   mlAccount   MercadoLibreAccount @relation(fields: [mlAccountId], references: [id])
+
+  // ── Multi-marketplace fields ──
+  marketplace            Marketplace
+  externalOrderId        String
+  marketplaceAccountId   String
+  marketplaceAccount     MarketplaceAccount   @relation("MarketplaceAccountOrders", fields: [marketplaceAccountId], references: [id])
+  normalizedStatus       OrderStatus
+  buyerName              String?
+  shippingAddress        Json?
+  marketplaceCreatedAt   DateTime?
+
+  @@unique([tenantId, marketplace, externalOrderId])
+  @@index([tenantId, normalizedStatus])
+  @@index([tenantId, marketplace])
+  @@index([marketplaceAccountId])
 
   orderItems          OrderItem[]
   deliveryAssignment  DeliveryAssignment?

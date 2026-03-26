@@ -22,7 +22,7 @@ export const getPackingLogs = async ({ tenantId, userId, from, to }) => {
         orderBy: { packedAt: "desc" },
         include: {
             user: { select: { id: true, name: true, role: true } },
-            order: { select: { id: true, packId: true, buyerNickname: true, receiverCity: true, shippingId: true, shippingStatus: true } },
+            order: { select: { id: true, packId: true, buyerNickname: true, buyerName: true, marketplace: true, receiverCity: true, shippingId: true, shippingStatus: true } },
         },
     });
 };

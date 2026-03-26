@@ -32,7 +32,7 @@ export const syncOrdersController = async (req, res) => {
   try {
     const { tenantId } = req;
 
-    const result = await OrdersService.syncMercadoLibreOrders(tenantId);
+    const result = await OrdersService.syncAllAccounts(tenantId);
 
     res.json(result);
   } catch (error) {

@@ -24,7 +24,13 @@ export const upsertPaymentConfig = async (tenantId, amountPerDelivery) => {
 // ─────────────────────────────────────────
 
 export const createManualOrder = async (tenantId, { buyerNickname, receiverCity, notes }) => {
-    // Necesitamos una mlAccount del tenant para satisfacer el FK
+    // Necesitamos una cuenta de marketplace del tenant para satisfacer los FKs
+    const marketplaceAccount = await prisma.marketplaceAccount.findFirst({
+        where: { tenantId, isActive: true },
+    });
+    if (!marketplaceAccount) throw new Error("No hay cuenta de marketplace conectada. Conecta una cuenta primero.");
+
+    // Also need legacy mlAccount FK until old column is removed
     const mlAccount = await prisma.mercadoLibreAccount.findFirst({
         where: { tenantId, isActive: true },
     });
@@ -38,10 +44,16 @@ export const createManualOrder = async (tenantId, { buyerNickname, receiverCity,
             status: "manual",
             totalAmount: 0,
             buyerNickname: buyerNickname || null,
+            buyerName: buyerNickname || null,
             receiverCity: receiverCity || null,
             pickingStatus: "completed",
             tenantId,
             mlAccountId: mlAccount.id,
+            // Normalized fields
+            marketplace: marketplaceAccount.marketplace,
+            externalOrderId: id,
+            marketplaceAccountId: marketplaceAccount.id,
+            normalizedStatus: "PENDING",
         },
     });
 
@@ -161,6 +173,8 @@ export const getAssignments = async ({ tenantId, role, userId, date }) => {
                     status: true,
                     totalAmount: true,
                     buyerNickname: true,
+                    buyerName: true,
+                    marketplace: true,
                     shippingStatus: true,
                     shippingSubstatus: true,
                     receiverCity: true,
@@ -200,6 +214,8 @@ export const getDeliveryReport = async ({ tenantId, userId, date }) => {
                     packId: true,
                     totalAmount: true,
                     buyerNickname: true,
+                    buyerName: true,
+                    marketplace: true,
                     shippingStatus: true,
                     receiverCity: true,
                 },
