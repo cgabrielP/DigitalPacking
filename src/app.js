@@ -5,6 +5,7 @@ import adminRoutes from "./modules/admin/admin.routes.js";
 import deliveryRoutes from "./modules/delivery/delivery.routes.js"
 import logRoutes from "./modules/log/log.routes.js"
 import subscriptionRoutes from "./modules/subscription/subscription.routes.js";
+import accountsRoutes from "./modules/accounts/accounts.routes.js";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -46,6 +47,7 @@ app.use("/admin", adminRoutes)
 app.use("/delivery", deliveryRoutes);
 app.use("/api/log", logRoutes);
 app.use("/api/subscription", subscriptionRoutes);
+app.use("/api/accounts", accountsRoutes);
 
 
 export default app;
