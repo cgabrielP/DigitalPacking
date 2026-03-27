@@ -113,27 +113,21 @@ export default class FalabellaConnector extends MarketplaceConnector {
     if (skuSet.size === 0) return imageMap;
 
     try {
-      // Fetch all products (paginated) and build SellerSku → MainImage map
-      let offset = 0;
-      const limit = 100;
-      while (true) {
+      // SkuSellerList accepts a JSON array — batch in chunks of 50
+      const skuArray = [...skuSet];
+      for (let i = 0; i < skuArray.length; i += 50) {
+        const batch = skuArray.slice(i, i + 50);
         const data = await this._callApi("GetProducts", {
-          Limit: String(limit),
-          Offset: String(offset),
+          SkuSellerList: JSON.stringify(batch),
         });
         const products = data.SuccessResponse?.Body?.Products?.Product || [];
         const list = Array.isArray(products) ? products : [products];
-        if (list.length === 0 || !list[0]?.SellerSku) break;
 
         for (const p of list) {
-          if (p.MainImage && skuSet.has(p.SellerSku)) {
+          if (p.MainImage && p.SellerSku) {
             imageMap.set(p.SellerSku, p.MainImage);
           }
         }
-
-        // Stop early if we found all SKUs or reached end
-        if (imageMap.size >= skuSet.size || list.length < limit) break;
-        offset += limit;
       }
       console.log(`🖼️  [${this.label}] Imágenes obtenidas: ${imageMap.size}/${skuSet.size}`);
     } catch (e) {
