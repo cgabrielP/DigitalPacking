@@ -21,9 +21,12 @@ export function mapFalabellaOrder(fbOrder, fbItems = [], imageMap = new Map()) {
   // Normalize items to array (Falabella returns single item as object, not array)
   const itemList = Array.isArray(items) ? items : [items];
 
+  // Extract tracking code from items (same for all items in an order)
+  const trackingCode = itemList.find((i) => i.TrackingCode)?.TrackingCode || null;
+
   return {
     externalOrderId:    String(fbOrder.OrderId || fbOrder.OrderNumber),
-    externalShipmentId: fbOrder.ShipmentProviderId || null,
+    externalShipmentId: trackingCode,
     normalizedStatus:   mapStatus(status),
     buyerName:          `${fbOrder.CustomerFirstName || ""} ${fbOrder.CustomerLastName || ""}`.trim() || null,
     shippingAddress:    fbOrder.AddressShipping ? {
@@ -50,7 +53,7 @@ export function mapFalabellaOrder(fbOrder, fbItems = [], imageMap = new Map()) {
       buyerNickname:     `${fbOrder.CustomerFirstName || ""} ${fbOrder.CustomerLastName || ""}`.trim() || null,
       packId:            null,
       lastUpdatedAt:     fbOrder.UpdatedAt ? new Date(fbOrder.UpdatedAt) : null,
-      shippingId:        fbOrder.ShipmentProviderId || null,
+      shippingId:        trackingCode,
       shippingStatus:    status.toLowerCase(),
       shippingSubstatus: null,
       logisticType:      fbOrder.ShipmentProvider || null,

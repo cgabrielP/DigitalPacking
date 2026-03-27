@@ -223,7 +223,7 @@ export const getOrdersFromDB = async (tenantId) => {
   const result = [];
 
   for (const order of orders) {
-    const shippingCategory = resolveCategory(order.shippingStatus, order.shippingSubstatus);
+    const shippingCategory = resolveCategory(order);
     const deliveryUrgency = resolveDeliveryUrgency(order.deliveryPromise);
 
     if (order.packId) {
@@ -259,7 +259,16 @@ export const getOrdersFromDB = async (tenantId) => {
 
 // ── Categoría de envío (existente) ────────────────────────────────────────
 
-const resolveCategory = (status, substatus) => {
+const resolveCategory = (order) => {
+  // Use normalizedStatus for marketplace-agnostic categorization
+  const ns = order.normalizedStatus;
+  if (ns === "DELIVERED" || ns === "RETURNED") return "finalizados";
+  if (ns === "CANCELLED") return "finalizados";
+  if (ns === "IN_TRANSIT") return "en_transito";
+
+  // ML-specific substatus refinement
+  const status = order.shippingStatus;
+  const substatus = order.shippingSubstatus;
   if (["delivered", "not_delivered"].includes(status)) return "finalizados";
   if (["delivered", "stolen", "lost"].includes(substatus)) return "finalizados";
   if (status === "shipped") return "en_transito";
