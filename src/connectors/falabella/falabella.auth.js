@@ -15,8 +15,8 @@ import crypto from "crypto";
  */
 export function buildSignedUrl(credentials, action, extraParams = {}) {
   const { apiKey, userId, apiUrl } = credentials;
-  // Falabella Seller Center rejects timestamps with milliseconds
-  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  // Falabella expects ISO 8601 with explicit offset, not "Z"
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00");
 
   const params = {
     UserID: userId,
@@ -27,9 +27,11 @@ export function buildSignedUrl(credentials, action, extraParams = {}) {
     ...extraParams,
   };
 
-  // Sort params alphabetically and build the string to sign
+  // Sort params alphabetically, URL-encode keys and values per RFC 3986
   const sortedKeys = Object.keys(params).sort();
-  const paramString = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
+  const paramString = sortedKeys
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+    .join("&");
 
   // HMAC-SHA256 signature
   const signature = crypto
@@ -37,5 +39,5 @@ export function buildSignedUrl(credentials, action, extraParams = {}) {
     .update(paramString)
     .digest("hex");
 
-  return `${apiUrl}?${paramString}&Signature=${signature}`;
+  return `${apiUrl}?${paramString}&Signature=${encodeURIComponent(signature)}`;
 }
