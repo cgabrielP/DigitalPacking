@@ -19,9 +19,20 @@ export default class FalabellaConnector extends MarketplaceConnector {
 
   async _callApi(action, extraParams = {}) {
     const url = buildSignedUrl(this.credentials, action, extraParams);
-    const res = await axios.get(url, { timeout: 30000 });
 
-    // Falabella API returns errors inside the response body
+    let res;
+    try {
+      res = await axios.get(url, { timeout: 30000 });
+    } catch (err) {
+      // axios throws on non-2xx — extract the Falabella error body if present
+      const body = err.response?.data;
+      const msg = body?.ErrorResponse?.Head?.ErrorMessage
+        || body?.ErrorResponse?.Head?.ErrorCode
+        || err.message;
+      throw new Error(`Falabella API ${err.response?.status || "error"}: ${msg}`);
+    }
+
+    // Falabella API can also return errors inside a 200 response body
     if (res.data?.ErrorResponse) {
       const err = res.data.ErrorResponse?.Head?.ErrorMessage || "Error desconocido de Falabella";
       throw new Error(`Falabella API error: ${err}`);

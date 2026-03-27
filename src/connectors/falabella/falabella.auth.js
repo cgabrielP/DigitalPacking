@@ -15,7 +15,8 @@ import crypto from "crypto";
  */
 export function buildSignedUrl(credentials, action, extraParams = {}) {
   const { apiKey, userId, apiUrl } = credentials;
-  const timestamp = new Date().toISOString();
+  // Falabella Seller Center rejects timestamps with milliseconds
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   const params = {
     UserID: userId,
