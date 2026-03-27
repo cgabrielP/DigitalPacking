@@ -44,7 +44,7 @@ export default class FalabellaConnector extends MarketplaceConnector {
   // ── Public interface ──────────────────────────────────────────
 
   async fetchOrders(since) {
-    const sinceISO = since.toISOString();
+    const sinceISO = since.toISOString().replace(/\.\d{3}Z$/, "+00:00");
     const isFirstSync = !this.account.lastSyncedAt;
 
     console.log(`📅 [${this.label}] ${isFirstSync ? "Primer sync Falabella" : `Sync Falabella desde ${sinceISO}`}`);
@@ -82,6 +82,8 @@ export default class FalabellaConnector extends MarketplaceConnector {
 
     // Fetch items for each order
     const normalized = [];
+    const skusToLookup = new Set();
+
     for (const fbOrder of allOrders) {
       let items = [];
       try {
@@ -90,14 +92,55 @@ export default class FalabellaConnector extends MarketplaceConnector {
         });
         const rawItems = itemData.SuccessResponse?.Body?.OrderItems?.OrderItem || [];
         items = Array.isArray(rawItems) ? rawItems : [rawItems];
+        items.forEach((it) => { if (it.Sku) skusToLookup.add(it.Sku); });
       } catch (e) {
         console.warn(`⚠️ [${this.label}] No se pudieron obtener items de orden ${fbOrder.OrderId}:`, e.message);
       }
 
-      normalized.push(mapFalabellaOrder(fbOrder, items));
+      normalized.push({ fbOrder, items });
     }
 
-    return normalized;
+    // Build SKU → image map from GetProducts (batch)
+    const imageMap = await this._fetchProductImages(skusToLookup);
+
+    return normalized.map(({ fbOrder, items }) =>
+      mapFalabellaOrder(fbOrder, items, imageMap)
+    );
+  }
+
+  async _fetchProductImages(skuSet) {
+    const imageMap = new Map();
+    if (skuSet.size === 0) return imageMap;
+
+    try {
+      // Fetch all products (paginated) and build SellerSku → MainImage map
+      let offset = 0;
+      const limit = 100;
+      while (true) {
+        const data = await this._callApi("GetProducts", {
+          Limit: String(limit),
+          Offset: String(offset),
+        });
+        const products = data.SuccessResponse?.Body?.Products?.Product || [];
+        const list = Array.isArray(products) ? products : [products];
+        if (list.length === 0 || !list[0]?.SellerSku) break;
+
+        for (const p of list) {
+          if (p.MainImage && skuSet.has(p.SellerSku)) {
+            imageMap.set(p.SellerSku, p.MainImage);
+          }
+        }
+
+        // Stop early if we found all SKUs or reached end
+        if (imageMap.size >= skuSet.size || list.length < limit) break;
+        offset += limit;
+      }
+      console.log(`🖼️  [${this.label}] Imágenes obtenidas: ${imageMap.size}/${skuSet.size}`);
+    } catch (e) {
+      console.warn(`⚠️ [${this.label}] No se pudieron obtener imágenes de productos:`, e.message);
+    }
+
+    return imageMap;
   }
 
   async getShippingLabel(externalShipmentId) {

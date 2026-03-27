@@ -6,8 +6,12 @@ import { mapStatus } from "./falabella.status-map.js";
  * @param {object[]} fbItems — items from GetOrderItems response
  * @returns {object} Normalized order ready for DB upsert
  */
-export function mapFalabellaOrder(fbOrder, fbItems = []) {
-  const status = fbOrder.Statuses?.[0]?.Status || fbOrder.Status || "pending";
+export function mapFalabellaOrder(fbOrder, fbItems = [], imageMap = new Map()) {
+  // Statuses can be { Status: "pending" } (object) or [{ Status: "pending" }] (array)
+  const rawStatuses = fbOrder.Statuses;
+  const status = Array.isArray(rawStatuses)
+    ? rawStatuses[0]?.Status
+    : rawStatuses?.Status || fbOrder.Status || "pending";
 
   // Use items from GetOrderItems if available, fallback to embedded OrderItems
   const items = fbItems.length > 0
@@ -35,7 +39,7 @@ export function mapFalabellaOrder(fbOrder, fbItems = []) {
       externalItemId: String(item.OrderItemId || item.ShopSku || ""),
       title:          item.Name || "Sin título",
       quantity:       parseInt(item.Quantity) || 1,
-      pictureUrl:     null, // Falabella doesn't return images in order API
+      pictureUrl:     imageMap.get(item.Sku) || null,
       variation:      item.Variation || null,
     })),
 
@@ -51,7 +55,7 @@ export function mapFalabellaOrder(fbOrder, fbItems = []) {
       shippingSubstatus: null,
       logisticType:      fbOrder.ShipmentProvider || null,
       shippingOptionName: fbOrder.ShipmentProvider || null,
-      deliveryPromise:       null,
+      deliveryPromise:       fbOrder.PromisedShippingTime || null,
       estimatedDeliveryTime: fbOrder.PromisedShippingTime
         ? new Date(fbOrder.PromisedShippingTime) : null,
       estimatedDeliveryLimit: null,
