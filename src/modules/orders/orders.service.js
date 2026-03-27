@@ -108,7 +108,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodType:    raw.shippingMethodType,
         shippingDeliverTo:     raw.shippingDeliverTo,
         receiverCity:          raw.receiverCity,
-        mlAccountId:           legacyMlAccountId ?? account.id,
+        mlAccountId:           legacyMlAccountId,
         // Normalized fields
         marketplace:           account.marketplace,
         externalOrderId:       order.externalOrderId,
@@ -141,7 +141,7 @@ const syncAccount = async (account, tenantId) => {
         shippingMethodType:    raw.shippingMethodType,
         shippingDeliverTo:     raw.shippingDeliverTo,
         receiverCity:          raw.receiverCity,
-        mlAccountId:           legacyMlAccountId ?? account.id,
+        mlAccountId:           legacyMlAccountId,
         // Normalized fields
         marketplace:           account.marketplace,
         externalOrderId:       order.externalOrderId,
