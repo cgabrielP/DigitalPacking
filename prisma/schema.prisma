@@ -164,8 +164,8 @@ model Order {
 
   tenantId    String
   tenant      Tenant              @relation(fields: [tenantId], references: [id])
-  mlAccountId String
-  mlAccount   MercadoLibreAccount @relation(fields: [mlAccountId], references: [id])
+  mlAccountId String?
+  mlAccount   MercadoLibreAccount? @relation(fields: [mlAccountId], references: [id])
 
   // ── Multi-marketplace fields ──
   marketplace            Marketplace
