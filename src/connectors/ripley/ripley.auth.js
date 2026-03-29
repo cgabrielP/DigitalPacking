@@ -5,7 +5,7 @@
  * `Authorization` header on every request. No token refresh needed.
  *
  * Credentials shape: { apiKey: string, shopId?: string }
- *
+ */
 
 export const RIPLEY_BASE_URL = "https://ripley-prod.mirakl.net/";
 
