@@ -293,29 +293,29 @@ const resolveCategory = (order) => {
 const resolveDeliveryUrgency = (deliveryPromise) => {
   if (!deliveryPromise) return "none";
 
+  // Nos aseguramos de tener un objeto Date (Prisma ya lo entrega así, pero por seguridad)
   const promise = new Date(deliveryPromise);
   const now = new Date();
 
-  // 1. ¿Ya pasó la hora exacta de corte? → overdue (UTC puro, siempre correcto)
+  // 1. ¿Ya pasó la hora exacta de corte? (La comparación en UTC nunca falla)
   if (promise < now) return "overdue";
 
-  // 2. Extraer offset del string de ML, ej: "-03:00" → -180 minutos
-  //    Fallback: Chile continental UTC-3
-  const offsetMatch = deliveryPromise.match(/([+-])(\d{2}):(\d{2})$/);
-  let offsetMinutes = -180;
-  if (offsetMatch) {
-    const sign = offsetMatch[1] === "+" ? 1 : -1;
-    offsetMinutes = sign * (parseInt(offsetMatch[2]) * 60 + parseInt(offsetMatch[3]));
-  }
-
-  // 3. Convertir fecha al día calendario local sumando el offset a UTC
-  const toLocalDateStr = (date) => {
-    const local = new Date(date.getTime() + offsetMinutes * 60 * 1000);
-    return local.getUTCFullYear() + "-" + local.getUTCMonth() + "-" + local.getUTCDate();
+  // 2. Formateador nativo para obtener la fecha en hora de Chile
+  // Esto maneja automáticamente los cambios de horario de verano/invierno
+  const options = { 
+    timeZone: "America/Santiago", 
+    year: "numeric", 
+    month: "2-digit", 
+    day: "2-digit" 
   };
+  const formatter = new Intl.DateTimeFormat("es-CL", options);
 
-  // 4. ¿Misma fecha local? → today. Si no → upcoming
-  return toLocalDateStr(promise) === toLocalDateStr(now) ? "today" : "upcoming";
+  // 3. Obtenemos strings con formato "DD-MM-YYYY" en hora chilena
+  const promiseDateStr = formatter.format(promise);
+  const nowDateStr = formatter.format(now);
+
+  // 4. ¿Misma fecha en Chile? → today. Si no → upcoming
+  return promiseDateStr === nowDateStr ? "today" : "upcoming";
 };
 
 // ─────────────────────────────────────────
