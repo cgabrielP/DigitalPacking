@@ -109,17 +109,30 @@ export default class RipleyConnector extends MarketplaceConnector {
   }
 
   /**
-   * Get shipping label/documents for an order via Mirakl OR72.
-   * Mirakl returns documents as PDF streams.
+   * Get shipping label for a Ripley order.
+   *
+   * The caller passes order.shippingId (tracking number), but Mirakl
+   * needs the order_id. We receive the tracking number so we look up
+   * the order first, then download documents.
+   *
+   * Mirakl endpoint: GET /orders/{order_id}/documents/download
    */
-  async getShippingLabel(externalShipmentId) {
-    // In Mirakl, documents are fetched by order ID, not shipment ID.
-    // externalShipmentId here is the tracking number; we need the order ID.
-    // The caller passes the order's externalOrderId when marketplace is not ML.
-    const orderId = externalShipmentId;
+  async getShippingLabel(shippingId) {
+    // shippingId = tracking number. We need to find the order_id.
+    // Search orders by tracking number.
+    const data = await this._callApi("/orders", {
+      shipping_tracking: shippingId,
+      max: 1,
+    });
 
+    const order = data.orders?.[0];
+    if (!order) {
+      throw new Error(`No se encontró orden Ripley con tracking ${shippingId}`);
+    }
+
+    const orderId = order.order_id;
     const res = await this._callApiStream(
-      `/orders/${orderId}/documents`
+      `/orders/${orderId}/documents/download`
     );
 
     return {
