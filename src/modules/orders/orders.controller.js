@@ -68,8 +68,15 @@ export const getLabelController = async (req, res) => {
     const { tenantId }  = req;
     const { orderId }   = req.params;
 
-    const { stream, contentType, shippingId } =
-      await OrdersService.getShipmentLabel(tenantId, orderId);
+    const result = await OrdersService.getShipmentLabel(tenantId, orderId);
+
+    // Some marketplaces (e.g. Ripley) don't provide label downloads —
+    // they return a carrier tracking URL instead.
+    if (result.redirectUrl) {
+      return res.redirect(result.redirectUrl);
+    }
+
+    const { stream, contentType, shippingId } = result;
 
     res.setHeader("Content-Type", contentType);
     res.setHeader(

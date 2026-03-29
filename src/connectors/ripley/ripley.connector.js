@@ -111,15 +111,11 @@ export default class RipleyConnector extends MarketplaceConnector {
   /**
    * Get shipping label for a Ripley order.
    *
-   * The caller passes order.shippingId (tracking number), but Mirakl
-   * needs the order_id. We receive the tracking number so we look up
-   * the order first, then download documents.
-   *
-   * Mirakl endpoint: GET /orders/{order_id}/documents/download
+   * Ripley's Mirakl instance does not expose document download endpoints.
+   * Instead, the carrier provides a tracking URL (e.g. Blue Express).
+   * We return a redirect URL so the frontend can open it.
    */
   async getShippingLabel(shippingId) {
-    // shippingId = tracking number. We need to find the order_id.
-    // Search orders by tracking number.
     const data = await this._callApi("/orders", {
       shipping_tracking: shippingId,
       max: 1,
@@ -130,15 +126,14 @@ export default class RipleyConnector extends MarketplaceConnector {
       throw new Error(`No se encontró orden Ripley con tracking ${shippingId}`);
     }
 
-    const orderId = order.order_id;
-    const res = await this._callApiStream(
-      `/orders/${orderId}/documents/download`
-    );
+    const trackingUrl = order.shipping_tracking_url;
+    if (!trackingUrl) {
+      throw new Error("La orden de Ripley no tiene URL de seguimiento del transportista");
+    }
 
     return {
-      stream: res.data,
-      contentType: res.headers["content-type"] || "application/pdf",
-      shippingId: orderId,
+      redirectUrl: trackingUrl,
+      shippingId: order.order_id,
     };
   }
 
