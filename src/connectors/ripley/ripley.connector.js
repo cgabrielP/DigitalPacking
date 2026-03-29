@@ -86,7 +86,7 @@ export default class RipleyConnector extends MarketplaceConnector {
         start_date: sinceISO,
         offset,
         max: limit,
-        sort: "date_created",
+        sort: "dateCreated",
       };
       if (this.credentials.shopId) params.shop_id = this.credentials.shopId;
 
