@@ -1,10 +1,11 @@
 import MercadoLibreConnector from "./mercadolibre/ml.connector.js";
 import FalabellaConnector from "./falabella/falabella.connector.js";
+import RipleyConnector from "./ripley/ripley.connector.js";
 
 const connectors = {
   MERCADOLIBRE: MercadoLibreConnector,
   FALABELLA:    FalabellaConnector,
-  // RIPLEY:       MiraklConnector,
+  RIPLEY:       RipleyConnector,
   // WALMART:      WalmartConnector,
 };
 

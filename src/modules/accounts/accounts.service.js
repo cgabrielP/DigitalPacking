@@ -102,7 +102,6 @@ function validateCredentials(marketplace, credentials) {
       break;
     case "RIPLEY":
       if (!credentials.apiKey) throw new Error("apiKey es requerido para Ripley");
-      if (!credentials.shopId) throw new Error("shopId es requerido para Ripley");
       break;
     case "WALMART":
       if (!credentials.clientId) throw new Error("clientId es requerido para Walmart");
