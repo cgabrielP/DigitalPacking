@@ -7,7 +7,7 @@
  * Credentials shape: { apiKey: string, shopId?: string }
  */
 
-export const RIPLEY_BASE_URL = "https://ripley-prod.mirakl.net/";
+export const RIPLEY_BASE_URL = "https://ripley-prod.mirakl.net/api";
 
 /**
  * Build standard headers for Mirakl API calls.
